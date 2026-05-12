@@ -23,6 +23,7 @@ copilot-messages.log
 *.gz
 *.bz2
 *.xz
+*.pyc
 CAMEROON_SETUP.md
 ADAPTATIONS_CAMEROUN.md
 AGENT.md
