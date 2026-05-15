@@ -1,30 +1,57 @@
-# Codebase summary
+# Résumé technique du codebase
 
 Date: 2026-05-15
 
-Repository: https://github.com/ABOGO-tech237/SGEP
+Ce dépôt héberge principalement l'application backend d'un système de gestion d'école primaire (Django). Le code applicatif principal se trouve sous le dossier `backend/`. Le dossier `frontend/` est volontairement vide et contient un fichier repère.
 
-Branches
-- `main`: deliberately empty (root kept minimal). Commit: empty root commit.
-- `backenddevellopement-01`: active development branch containing the full backend code under the `backend/` folder.
+Branches importantes
+- `main`: Branche principale volontairement vide (commit racine vide).
+- `backenddevellopement-01`: Branche de développement active contenant l'ensemble du backend.
 
-Structure (workspace root)
-- `backend/` — Django backend application (apps such as `accounts`, `students`, `teachers`, etc.). All existing source files were moved here.
-- `frontend/` — intentionally empty; contains `.gitkeep` as placeholder.
+Vue d'ensemble de l'architecture
+- Projet Django localisé dans `backend/SGEP` (module projet).
+- Apps Django (chaque app est sous `backend/<appname>`) : `accounts`, `students`, `teachers`, `classes`, `attendance`, `finance`, `grades`, `parents`, `reports`, `notifications`, `core`, etc.
+- Pattern d'accès aux données : `View (DRF) -> Service -> Repository -> Appwrite SDK`.
+- Authentification : modèle utilisateur custom (`accounts.models.User`) + génération/validation de JWT (Simple JWT) ; persistance utilisateurs et blacklist via Appwrite.
 
-Actions performed
-- Moved all project sources into `backend/` and added `frontend/.gitkeep`.
-- Created an orphan empty `main` branch to keep the main branch minimal.
-- Created/updated `backenddevellopement-01` from the development commit and pushed it to origin.
-- Deleted the local `develop` branch (development work continues on `backenddevellopement-01`).
+Fichiers et dossiers clés
+- `backend/manage.py` : commandes Django (tests, runserver, etc.).
+- `backend/SGEP/settings.py` : configuration Django.
+- `backend/config/appwrite_client.py` et `backend/core/services/appwrite_service.py` : wrapper/connexion à Appwrite.
+- `backend/accounts/` : logique auth (vues, services, repository, permissions, serializers, modèles).
+- `backend/core/management/commands/` : scripts utilitaires (ex. `setup_appwrite.py`, `populate_cameroon_data.py`).
+- `backend/requirements.txt` : dépendances Python.
+- `backend/docker-compose.yml`, `backend/Dockerfile` : fichiers d'orchestration et containerisation.
 
-How to get the code locally
+Dépendances et environnement
+- Utilise Appwrite pour la persistence métier et Redis/Celery pour les tâches asynchrones.
+- Variables d'environnement attendues (extrait) :
+	- `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_API_KEY`, `APPWRITE_DB_ID`
+	- `REDIS_URL`, `CELERY_BROKER_URL`
+	- `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`
+
+Exécution locale (rapide)
 ```bash
-git clone https://github.com/ABOGO-tech237/SGEP.git
-git checkout backenddevellopement-01
-ls backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+# définir les variables d'environnement requises (Appwrite, Redis...)
+python backend/manage.py test
+python backend/manage.py runserver
 ```
 
-Notes / Next steps
-- Keep feature/dev branches (e.g., `backenddevellopement-01`) for active work and leave `main` for stable/releases or keep it empty per the chosen workflow.
-- If you want, I can remove the remote `develop` branch as well, or create additional dev branches.
+Tests
+- Les tests unitaires et d'API sont dans les répertoires `backend/*/tests.py` (ex. `backend/accounts/tests.py`, `backend/students/tests.py`).
+- Les tests qui touchent Appwrite utilisent des mocks afin d'isoler la logique métier.
+
+Remarques importantes
+- Le projet implémente une couche `repository` pour isoler Appwrite de la logique métier.
+- La branche `main` est intentionnellement vide selon le workflow souhaité ; le développement actif se fait sur `backenddevellopement-01` ou branches de fonctionnalité dérivées.
+- Pour toute opération critique (reset de branches distantes, suppression), faire une sauvegarde ou tagger un commit avant d'appliquer des modifications destructrices.
+
+Où chercher selon le besoin
+- Auth / JWT / Appwrite integration : `backend/accounts/`, `backend/config/`, `backend/core/services/appwrite_service.py`.
+- Scripts d'initialisation / peuplement : `backend/core/management/commands/`.
+- Configuration générale : `backend/SGEP/settings.py` et `backend/requirements.txt`.
+
+Si tu veux, je peux générer une version plus détaillée (arborescence complète, diagramme des dépendances, ou checklist de déploiement).
