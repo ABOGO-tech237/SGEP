@@ -44,14 +44,6 @@ Tests
 - Les tests unitaires et d'API sont dans les répertoires `backend/*/tests.py` (ex. `backend/accounts/tests.py`, `backend/students/tests.py`).
 - Les tests qui touchent Appwrite utilisent des mocks afin d'isoler la logique métier.
 
-Remarques importantes
-- Le projet implémente une couche `repository` pour isoler Appwrite de la logique métier.
-- La branche `main` est intentionnellement vide selon le workflow souhaité ; le développement actif se fait sur `backenddevellopement-01` ou branches de fonctionnalité dérivées.
-- Pour toute opération critique (reset de branches distantes, suppression), faire une sauvegarde ou tagger un commit avant d'appliquer des modifications destructrices.
 
-Où chercher selon le besoin
-- Auth / JWT / Appwrite integration : `backend/accounts/`, `backend/config/`, `backend/core/services/appwrite_service.py`.
-- Scripts d'initialisation / peuplement : `backend/core/management/commands/`.
-- Configuration générale : `backend/SGEP/settings.py` et `backend/requirements.txt`.
 
-Si tu veux, je peux générer une version plus détaillée (arborescence complète, diagramme des dépendances, ou checklist de déploiement).
+
