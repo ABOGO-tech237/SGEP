@@ -1,7 +1,9 @@
+import InactivityGuard from "@/components/InactivityGuard";
+
 export default function AccountantLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <InactivityGuard>{children}</InactivityGuard>;
 }
