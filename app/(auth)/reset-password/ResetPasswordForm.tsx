@@ -4,13 +4,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
-import { LoginSchema, type LoginFormValues } from "@/lib/types/auth";
-import { useAuth } from "@/context/AuthContext";
-import { useSessionStore } from "@/stores/session";
-import { ROLE_ROUTE_PREFIX } from "@/lib/auth/constants";
+import {
+  ResetPasswordSchema,
+  type ResetPasswordValues,
+} from "@/lib/types/auth";
+import { confirmPasswordReset } from "@/lib/auth";
 
 type StrengthLevel = "weak" | "fair" | "strong";
 
@@ -37,17 +36,17 @@ const STRENGTH_CONFIG: Record<
   strong: { label: "Strong", bars: 3, color: "bg-green-600" },
 };
 
-interface LoginFormProps {
-  resetSuccess?: boolean;
+interface ResetPasswordFormProps {
+  userId: string;
+  secret: string;
 }
 
-export default function LoginForm({ resetSuccess }: LoginFormProps) {
+export default function ResetPasswordForm({
+  userId,
+  secret,
+}: ResetPasswordFormProps) {
   "use no memo";
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { login } = useAuth();
-  const setUser = useSessionStore((s) => s.setUser);
-
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -56,27 +55,22 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
     handleSubmit,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(LoginSchema),
+  } = useForm<ResetPasswordValues>({
+    resolver: zodResolver(ResetPasswordSchema),
   });
 
   const password = watch("password", "");
   const strength = getPasswordStrength(password);
 
-  async function onSubmit(data: LoginFormValues) {
+  async function onSubmit(data: ResetPasswordValues) {
     setServerError(null);
     try {
-      const user = await login(data.email, data.password);
-      await fetch("/api/auth/role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: user.role }),
-      });
-      setUser(user);
-      queryClient.clear();
-      router.replace(ROLE_ROUTE_PREFIX[user.role]);
+      await confirmPasswordReset(userId, secret, data.password);
+      router.replace("/login?reset=success");
     } catch {
-      setServerError("Invalid email or password.");
+      setServerError(
+        "This link is invalid or has expired. Please request a new one.",
+      );
     }
   }
 
@@ -86,15 +80,6 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
       noValidate
       className="flex flex-col gap-5"
     >
-      {resetSuccess && (
-        <div
-          role="status"
-          className="rounded-md border border-green-600/30 bg-green-600/10 px-4 py-3 text-sm text-green-700"
-        >
-          Password updated — please sign in.
-        </div>
-      )}
-
       {serverError && (
         <div
           role="alert"
@@ -106,42 +91,14 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
       )}
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-sm font-medium">
-          Email address
+        <label htmlFor="password" className="text-sm font-medium">
+          New password
         </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          aria-describedby={errors.email ? "email-error" : undefined}
-          aria-invalid={!!errors.email}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
-          {...register("email")}
-        />
-        {errors.email && (
-          <p id="email-error" className="text-xs text-destructive" role="alert">
-            {errors.email.message}
-          </p>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="password" className="text-sm font-medium">
-            Password
-          </label>
-          <Link
-            href="/forgot-password"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            Forgot password?
-          </Link>
-        </div>
         <div className="relative">
           <input
             id="password"
             type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
+            autoComplete="new-password"
             aria-describedby={
               errors.password
                 ? "password-error"
@@ -198,12 +155,38 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
         )}
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="confirmPassword" className="text-sm font-medium">
+          Confirm new password
+        </label>
+        <input
+          id="confirmPassword"
+          type={showPassword ? "text" : "password"}
+          autoComplete="new-password"
+          aria-describedby={
+            errors.confirmPassword ? "confirm-error" : undefined
+          }
+          aria-invalid={!!errors.confirmPassword}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
+          {...register("confirmPassword")}
+        />
+        {errors.confirmPassword && (
+          <p
+            id="confirm-error"
+            className="text-xs text-destructive"
+            role="alert"
+          >
+            {errors.confirmPassword.message}
+          </p>
+        )}
+      </div>
+
       <button
         type="submit"
         disabled={isSubmitting}
         className="rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isSubmitting ? "Signing in…" : "Sign in"}
+        {isSubmitting ? "Updating…" : "Update password"}
       </button>
     </form>
   );

@@ -43,7 +43,7 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
   );
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 

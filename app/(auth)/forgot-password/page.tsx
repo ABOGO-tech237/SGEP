@@ -5,26 +5,16 @@ import {
   ROLE_ROUTE_PREFIX,
   type UserRole,
 } from "@/lib/auth/constants";
-import LoginForm from "./LoginForm";
-
-export const dynamic = "force-dynamic";
+import ForgotPasswordForm from "./ForgotPasswordForm";
 
 export const metadata = {
-  title: "Sign in — PSMS",
+  title: "Forgot password — PSMS",
 };
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ reset?: string }>;
-}) {
+export default async function ForgotPasswordPage() {
   const cookieStore = await cookies();
   const role = cookieStore.get(ROLE_COOKIE)?.value as UserRole | undefined;
-  if (role && ROLE_ROUTE_PREFIX[role]) {
-    redirect(ROLE_ROUTE_PREFIX[role]);
-  }
-
-  const { reset } = await searchParams;
+  if (role && ROLE_ROUTE_PREFIX[role]) redirect(ROLE_ROUTE_PREFIX[role]);
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
@@ -37,10 +27,11 @@ export default async function LoginPage({
         </div>
 
         <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="mb-5 text-lg font-semibold">
-            Sign in to your account
-          </h2>
-          <LoginForm resetSuccess={reset === "success"} />
+          <h2 className="mb-2 text-lg font-semibold">Reset your password</h2>
+          <p className="mb-5 text-sm text-muted-foreground">
+            Enter your email and we&apos;ll send you a reset link.
+          </p>
+          <ForgotPasswordForm />
         </div>
       </div>
     </main>
