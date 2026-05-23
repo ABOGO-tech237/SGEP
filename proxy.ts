@@ -8,12 +8,6 @@ import {
 
 const LOGIN_URL = "/login";
 
-function getAppwriteSessionCookie(): string {
-  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
-  if (!projectId) throw new Error("NEXT_PUBLIC_APPWRITE_PROJECT_ID is not set");
-  return `a_session_${projectId}`;
-}
-
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
   const appwriteOrigin = new URL(
@@ -64,11 +58,6 @@ export async function proxy(request: NextRequest) {
     });
     applySecurityHeaders(response, nonce);
     return response;
-  }
-
-  const sessionCookie = request.cookies.get(getAppwriteSessionCookie())?.value;
-  if (!sessionCookie) {
-    return NextResponse.redirect(new URL(LOGIN_URL, request.url));
   }
 
   const role = request.cookies.get(ROLE_COOKIE)?.value as UserRole | undefined;
