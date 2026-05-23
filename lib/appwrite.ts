@@ -1,9 +1,12 @@
 import { Client, Account, Databases, Storage, Teams } from "appwrite";
 
 export function createAppwriteClient(): Client {
+  const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+  console.log("[appwrite] client init", { endpoint, projectId });
   return new Client()
-    .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
+    .setEndpoint(endpoint!)
+    .setProject(projectId!);
 }
 
 export function createAccount(client?: Client): Account {

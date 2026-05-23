@@ -75,8 +75,11 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
       setUser(user);
       queryClient.clear();
       router.replace(ROLE_ROUTE_PREFIX[user.role]);
-    } catch {
-      setServerError("Invalid email or password.");
+    } catch (err) {
+      console.error("[login] failed:", err);
+      const message =
+        err instanceof Error ? err.message : "Something went wrong.";
+      setServerError(message);
     }
   }
 

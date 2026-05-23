@@ -16,13 +16,16 @@ function getAppwriteSessionCookie(): string {
 
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
+  const appwriteOrigin = new URL(
+    process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT ?? "https://cloud.appwrite.io/v1",
+  ).origin;
   const directives = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    "connect-src 'self'",
+    `connect-src 'self' ${appwriteOrigin}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
