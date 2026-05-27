@@ -1,10 +1,28 @@
 import { cookies } from "next/headers";
+import { TEAM_IDS, USER_ROLES } from "@/lib/auth/constants";
 import { LoginSchema } from "@/lib/types/auth";
-import type { LoginApiResponse } from "@/lib/types/auth";
+import type { LoginApiResponse, LoginApiRole } from "@/lib/types/auth";
 
 const SESSION_COOKIE = "psms_session";
 const CSRF_COOKIE = "psms_csrf";
 const SESSION_MAX_AGE = 30 * 60; // 30 minutes
+
+function normalizeRole(role: string): LoginApiRole {
+  if (role === "superadmin" || role === "comptable") {
+    return USER_ROLES.ADMIN;
+  }
+
+  if (
+    role === USER_ROLES.ADMIN ||
+    role === USER_ROLES.TEACHER ||
+    role === USER_ROLES.STUDENT ||
+    role === USER_ROLES.PARENT
+  ) {
+    return role;
+  }
+
+  return USER_ROLES.ADMIN;
+}
 
 export async function POST(request: Request): Promise<Response> {
   const body: unknown = await request.json().catch(() => null);
@@ -21,7 +39,7 @@ export async function POST(request: Request): Promise<Response> {
 
   let djangoRes: Response;
   try {
-    djangoRes = await fetch(`${apiUrl}/auth/login/`, {
+    djangoRes = await fetch(`${apiUrl}/api/v1/auth/login/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.data),
@@ -42,6 +60,7 @@ export async function POST(request: Request): Promise<Response> {
     role: string;
     user: { id: string; email: string; name: string };
   };
+  const role = normalizeRole(djangoData.role);
 
   const cookieStore = await cookies();
   const isProd = process.env.NODE_ENV === "production";
@@ -63,12 +82,13 @@ export async function POST(request: Request): Promise<Response> {
   });
 
   const responseBody: LoginApiResponse = {
-    role: djangoData.role as LoginApiResponse["role"],
+    role,
     user: {
       id: djangoData.user.id,
       email: djangoData.user.email,
       name: djangoData.user.name,
-      role: djangoData.role as LoginApiResponse["role"],
+      role,
+      teamId: TEAM_IDS[role],
     },
   };
 

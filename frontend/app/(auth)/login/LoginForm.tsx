@@ -8,9 +8,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { LoginSchema, type LoginFormValues } from "@/lib/types/auth";
-import { useAuth } from "@/context/AuthContext";
 import { useSessionStore } from "@/stores/session";
 import { ROLE_ROUTE_PREFIX } from "@/lib/auth/constants";
+import type { LoginApiResponse } from "@/lib/types/auth";
 
 type StrengthLevel = "weak" | "fair" | "strong";
 
@@ -51,7 +51,6 @@ export default function LoginForm({
   "use no memo";
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { login } = useAuth();
   const setUser = useSessionStore((s) => s.setUser);
 
   const [serverError, setServerError] = useState<string | null>(null);
@@ -74,18 +73,40 @@ export default function LoginForm({
   const password = watch("password", "");
   const strength = getPasswordStrength(password);
 
+  function getLoginDestination(role: LoginApiResponse["role"]): string {
+    return ROLE_ROUTE_PREFIX[role];
+  }
+
   async function submitLogin(data: LoginFormValues) {
     setServerError(null);
     try {
-      const user = await login(data.email, data.password);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | LoginApiResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok || !payload || !("role" in payload) || !("user" in payload)) {
+        throw new Error(
+          (payload && "error" in payload && payload.error) ||
+            "Something went wrong.",
+        );
+      }
+
       await fetch("/api/auth/role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: user.role }),
+        body: JSON.stringify({ role: payload.role }),
       });
-      setUser(user);
+
+      setUser(payload.user);
       queryClient.clear();
-      router.replace(ROLE_ROUTE_PREFIX[user.role]);
+      router.replace(getLoginDestination(payload.role));
     } catch (err) {
       console.error("[login] failed:", err);
       const message =

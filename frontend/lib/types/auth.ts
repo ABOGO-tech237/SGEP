@@ -1,6 +1,13 @@
 import { z } from "zod";
 import type { SchoolUser } from "@/lib/auth";
 
+export type LoginApiRole = "admin" | "teacher" | "student" | "parent";
+
+export interface LoginApiResponse {
+  role: LoginApiRole;
+  user: SchoolUser;
+}
+
 export const LoginSchema = z.object({
   email: z.email({ error: "Enter a valid email address." }),
   password: z.string().min(1, { error: "Password is required." }),
