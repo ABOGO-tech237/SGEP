@@ -16,7 +16,10 @@ REFRESH_TOKEN_BLACKLIST_COLLECTION_ID = "refresh_token_blacklist"
 class UserRepository:
     @staticmethod
     def _normalize_user(document: dict) -> dict:
-        if hasattr(document, "model_dump"):
+        # Appwrite Document objects have custom fields in .data attribute
+        if hasattr(document, "data"):
+            raw_document = dict(document.data or {})
+        elif hasattr(document, "model_dump"):
             raw_document = document.model_dump()
         elif isinstance(document, dict):
             raw_document = dict(document)
@@ -24,9 +27,14 @@ class UserRepository:
             raw_document = dict(document)
 
         normalized = dict(raw_document)
-        normalized["id"] = raw_document.get("$id", raw_document.get("id"))
-        return normalized
 
+        # Ensure we have an 'id' field for consistency
+        if "id" not in normalized:
+            if isinstance(document, dict):
+                normalized["id"] = document.get("$id")
+            else:
+                normalized["id"] = getattr(document, "id", None)
+        return normalized
     @staticmethod
     def list(
         filters: list[Any] | None = None,

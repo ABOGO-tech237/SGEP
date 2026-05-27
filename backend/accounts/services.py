@@ -12,6 +12,7 @@ from accounts.models import (
     ROLE_COMPTABLE,
     ROLE_PARENT,
     ROLE_SUPERADMIN,
+    User,
 )
 from accounts.repository import RefreshTokenBlacklistRepository, UserRepository
 
