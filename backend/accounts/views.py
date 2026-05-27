@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from appwrite.query import Query
 
 try:
 	ratelimit = importlib.import_module("django_ratelimit.decorators").ratelimit
@@ -16,12 +17,14 @@ except ModuleNotFoundError:  # pragma: no cover
 		return _decorator
 
 from accounts.serializers import (
+	AdminDashboardSerializer,
 	ChangePasswordSerializer,
 	LoginSerializer,
 	LogoutSerializer,
 	RefreshSerializer,
 )
-from accounts.services import AuthService
+from accounts.services import AdminDashboardService, AuthService
+from accounts.permissions import IsSuperAdmin
 
 
 @method_decorator(ratelimit(key="ip", rate="5/10m", method="POST", block=True), name="post")
@@ -78,3 +81,13 @@ class ChangePasswordView(APIView):
 			new_password=serializer.validated_data["new_password"],
 		)
 		return Response({"detail": "Mot de passe modifie."}, status=status.HTTP_200_OK)
+
+
+class AdminDashboardView(APIView):
+	permission_classes = [IsSuperAdmin]
+
+	def get(self, request):
+		payload = AdminDashboardService.get_overview()
+		serializer = AdminDashboardSerializer(data=payload)
+		serializer.is_valid(raise_exception=True)
+		return Response(serializer.validated_data, status=status.HTTP_200_OK)

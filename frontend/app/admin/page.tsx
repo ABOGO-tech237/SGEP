@@ -1,94 +1,28 @@
 import {
-  Users,
-  GraduationCap,
   BookOpen,
-  TrendingUp,
-  Bell,
+  ChevronRight,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
   LogOut,
   Settings,
-  LayoutDashboard,
+  ShieldCheck,
+  Users,
   UserCheck,
-  FileText,
-  ChevronRight,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { getAdminDashboard } from "@/lib/admin";
+import type { AdminDashboardData, AdminUserSummary } from "@/lib/types/admin";
 
-const stats = [
-  {
-    label: "Total Students",
-    value: "1,284",
-    change: "+12 this month",
-    positive: true,
-    icon: GraduationCap,
-    color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
-  },
-  {
-    label: "Teaching Staff",
-    value: "87",
-    change: "+3 this term",
-    positive: true,
-    icon: Users,
-    color:
-      "bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400",
-  },
-  {
-    label: "Active Classes",
-    value: "42",
-    change: "Across 6 grades",
-    positive: null,
-    icon: BookOpen,
-    color:
-      "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
-  },
-  {
-    label: "Avg. Attendance",
-    value: "94.2%",
-    change: "+1.4% vs last week",
-    positive: true,
-    icon: TrendingUp,
-    color:
-      "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
-  },
-];
-
-const recentActivity = [
-  {
-    name: "Emily Asante",
-    action: "Enrolled",
-    grade: "Grade 3B",
-    status: "ACTIVE" as const,
-    time: "2 min ago",
-  },
-  {
-    name: "Kwame Mensah",
-    action: "Fee overdue",
-    grade: "Grade 5A",
-    status: "OVERDUE" as const,
-    time: "1 hr ago",
-  },
-  {
-    name: "Abena Owusu",
-    action: "Transfer request",
-    grade: "Grade 2C",
-    status: "PENDING" as const,
-    time: "3 hr ago",
-  },
-  {
-    name: "Kofi Boateng",
-    action: "Profile updated",
-    grade: "Grade 4B",
-    status: "ACTIVE" as const,
-    time: "Yesterday",
-  },
-  {
-    name: "Akosua Darko",
-    action: "Suspended",
-    grade: "Grade 6A",
-    status: "SUSPENDED" as const,
-    time: "Yesterday",
-  },
-];
+type StatCard = {
+  label: string;
+  value: number;
+  change: string;
+  icon: typeof GraduationCap;
+  color: string;
+};
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, active: true },
@@ -99,10 +33,95 @@ const navItems = [
   { label: "Settings", icon: Settings, active: false },
 ];
 
-export default function AdminDashboard() {
+function formatName(user: AdminUserSummary): string {
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  return user.name || fullName || user.email;
+}
+
+function formatRole(role: string): string {
+  return role
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatDate(value: string): string {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function buildCards(data: AdminDashboardData): StatCard[] {
+  return [
+    {
+      label: "Total Accounts",
+      value: data.total_users,
+      change: "Synced from Appwrite",
+      icon: Users,
+      color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+    },
+    {
+      label: "Active Accounts",
+      value: data.active_users,
+      change: "Ready for login",
+      icon: ShieldCheck,
+      color:
+        "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
+    },
+    {
+      label: "Superadmins",
+      value: data.superadmins,
+      change: "Full administrative access",
+      icon: LayoutDashboard,
+      color:
+        "bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400",
+    },
+    {
+      label: "Parents",
+      value: data.parents,
+      change: "Portal accounts linked to learners",
+      icon: UserCheck,
+      color:
+        "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
+    },
+  ];
+}
+
+export default async function AdminDashboard() {
+  let dashboard: AdminDashboardData | null = null;
+  let errorMessage: string | null = null;
+
+  try {
+    dashboard = await getAdminDashboard();
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : "Unable to load dashboard data.";
+  }
+
+  if (!dashboard) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+        <div className="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            PSMS
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold">Admin dashboard unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {errorMessage ?? "No dashboard data returned from Django/Appwrite."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const cards = buildCards(dashboard);
+
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Sidebar */}
+    <div className="flex min-h-screen bg-background text-foreground overflow-hidden">
       <aside className="w-60 flex flex-col border-r border-border bg-card shrink-0">
         <div className="px-5 py-5 border-b border-border">
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
@@ -129,27 +148,18 @@ export default function AdminDashboard() {
 
         <div className="px-3 py-4 border-t border-border space-y-1">
           <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            <Bell className="size-4 shrink-0" />
-            Notifications
-            <span className="ml-auto bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 font-medium">
-              3
-            </span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
             <LogOut className="size-4 shrink-0" />
             Sign out
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-card shrink-0">
           <div>
             <h1 className="text-lg font-semibold">Dashboard</h1>
             <p className="text-xs text-muted-foreground">
-              Friday, 23 May 2026 · Term 2
+              Live sync with Django and Appwrite
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -163,106 +173,77 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        {/* Scrollable body */}
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          {/* Stat cards */}
           <div className="grid grid-cols-4 gap-4">
-            {stats.map(
-              ({ label, value, change, positive, icon: Icon, color }) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground font-medium">
-                      {label}
-                    </p>
-                    <span
-                      className={`size-8 rounded-lg flex items-center justify-center ${color}`}
-                    >
-                      <Icon className="size-4" />
-                    </span>
-                  </div>
-                  <p className="text-2xl font-bold tracking-tight">{value}</p>
-                  <p
-                    className={`text-xs font-medium ${positive === true ? "text-emerald-600 dark:text-emerald-400" : positive === false ? "text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {change}
-                  </p>
+            {cards.map(({ label, value, change, icon: Icon, color }) => (
+              <div key={label} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground font-medium">{label}</p>
+                  <span className={`size-8 rounded-lg flex items-center justify-center ${color}`}>
+                    <Icon className="size-4" />
+                  </span>
                 </div>
-              ),
-            )}
+                <p className="text-2xl font-bold tracking-tight">{value}</p>
+                <p className="text-xs font-medium text-muted-foreground">{change}</p>
+              </div>
+            ))}
           </div>
 
-          {/* Lower section */}
           <div className="grid grid-cols-3 gap-4">
-            {/* Recent activity */}
             <div className="col-span-2 rounded-xl border border-border bg-card">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h2 className="text-sm font-semibold">Recent Activity</h2>
+                <div>
+                  <h2 className="text-sm font-semibold">Recent Appwrite Users</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Latest records created in the users collection.
+                  </p>
+                </div>
                 <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors">
                   View all <ChevronRight className="size-3" />
                 </button>
               </div>
+
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Student
-                    </th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Action
-                    </th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Class
-                    </th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">
-                      Time
-                    </th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Email</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Role</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">Created</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentActivity.map(
-                    ({ name, action, grade, status, time }) => (
-                      <tr
-                        key={name}
-                        className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
-                      >
-                        <td className="px-5 py-3 font-medium">{name}</td>
-                        <td className="px-5 py-3 text-muted-foreground">
-                          {action}
-                        </td>
-                        <td className="px-5 py-3 text-muted-foreground">
-                          {grade}
-                        </td>
-                        <td className="px-5 py-3">
-                          <StatusBadge status={status} />
-                        </td>
-                        <td className="px-5 py-3 text-right text-muted-foreground text-xs">
-                          {time}
-                        </td>
-                      </tr>
-                    ),
-                  )}
+                  {dashboard.recent_users.map((user) => (
+                    <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                      <td className="px-5 py-3 font-medium">{formatName(user)}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{user.email}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{formatRole(user.role)}</td>
+                      <td className="px-5 py-3">
+                        <StatusBadge status={user.account_status.toUpperCase() as "ACTIVE" | "SUSPENDED" | "PENDING" | "PAID" | "OVERDUE"} />
+                      </td>
+                      <td className="px-5 py-3 text-right text-muted-foreground text-xs">
+                        {formatDate(user.created_at)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
-            {/* Quick actions */}
             <div className="rounded-xl border border-border bg-card">
               <div className="px-5 py-4 border-b border-border">
                 <h2 className="text-sm font-semibold">Quick Actions</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use the backend seeding command to insert sample Appwrite users.
+                </p>
               </div>
               <div className="p-4 space-y-2">
                 {[
-                  { label: "Enrol new student", icon: GraduationCap },
-                  { label: "Add teacher", icon: UserCheck },
-                  { label: "Create class", icon: BookOpen },
-                  { label: "Generate report", icon: FileText },
-                  { label: "Manage settings", icon: Settings },
+                  { label: "Create admin users", icon: GraduationCap },
+                  { label: "Create comptable account", icon: UserCheck },
+                  { label: "Refresh dashboard", icon: LayoutDashboard },
+                  { label: "Export report", icon: FileText },
                 ].map(({ label, icon: Icon }) => (
                   <button
                     key={label}

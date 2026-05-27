@@ -27,6 +27,7 @@ copilot-messages.log
 CAMEROON_SETUP.md
 ADAPTATIONS_CAMEROUN.md
 AGENT.md
+PROMPTS.md
 # Windows executables and installers
 *.exe
 *.msi

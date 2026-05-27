@@ -32,3 +32,25 @@ class ChangePasswordSerializer(serializers.Serializer):
             )
 
         return attrs
+
+
+class AdminUserSummarySerializer(serializers.Serializer):
+    id = serializers.CharField()
+    email = serializers.EmailField()
+    name = serializers.CharField(allow_blank=True)
+    first_name = serializers.CharField(allow_blank=True, required=False)
+    last_name = serializers.CharField(allow_blank=True, required=False)
+    role = serializers.CharField()
+    account_status = serializers.CharField()
+    created_at = serializers.CharField(allow_blank=True)
+    updated_at = serializers.CharField(allow_blank=True)
+
+
+class AdminDashboardSerializer(serializers.Serializer):
+    total_users = serializers.IntegerField()
+    active_users = serializers.IntegerField()
+    suspended_users = serializers.IntegerField()
+    superadmins = serializers.IntegerField()
+    comptables = serializers.IntegerField()
+    parents = serializers.IntegerField()
+    recent_users = AdminUserSummarySerializer(many=True)

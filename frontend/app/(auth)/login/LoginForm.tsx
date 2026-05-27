@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -39,9 +39,15 @@ const STRENGTH_CONFIG: Record<
 
 interface LoginFormProps {
   resetSuccess?: boolean;
+  initialEmail?: string;
+  initialPassword?: string;
 }
 
-export default function LoginForm({ resetSuccess }: LoginFormProps) {
+export default function LoginForm({
+  resetSuccess,
+  initialEmail,
+  initialPassword,
+}: LoginFormProps) {
   "use no memo";
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -50,6 +56,7 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [autoLoginStarted, setAutoLoginStarted] = useState(false);
 
   const {
     register,
@@ -58,12 +65,16 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(LoginSchema),
+    defaultValues: {
+      email: initialEmail ?? "",
+      password: initialPassword ?? "",
+    },
   });
 
   const password = watch("password", "");
   const strength = getPasswordStrength(password);
 
-  async function onSubmit(data: LoginFormValues) {
+  async function submitLogin(data: LoginFormValues) {
     setServerError(null);
     try {
       const user = await login(data.email, data.password);
@@ -81,6 +92,18 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
         err instanceof Error ? err.message : "Something went wrong.";
       setServerError(message);
     }
+  }
+
+  useEffect(() => {
+    if (autoLoginStarted) return;
+    if (!initialEmail || !initialPassword) return;
+
+    setAutoLoginStarted(true);
+    void submitLogin({ email: initialEmail, password: initialPassword });
+  }, [autoLoginStarted, initialEmail, initialPassword]);
+
+  async function onSubmit(data: LoginFormValues) {
+    await submitLogin(data);
   }
 
   return (

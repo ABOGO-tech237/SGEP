@@ -168,6 +168,112 @@ Ils couvrent:
 
 Les tests utilisent des mocks pour isoler Appwrite et verifier le comportement de chaque endpoint sans backend externe.
 
+Des tests du flux parent/eleve sont ajoutes dans [students/tests.py](students/tests.py) et [parents/tests.py](parents/tests.py).
+
+Ils couvrent:
+
+- creation d'un eleve avec creation automatique du compte parent
+- chiffrement et validation du champ medical
+- listage, historique, enrôlement et promotion d'un eleve
+- creation du lien parent/eleve
+- suspension et reactivation des comptes parents relies
+
+## Flux parent/eleve
+
+Le module élèves s'appuie sur les collections Appwrite suivantes:
+
+- `students`
+- `student_histories`
+- `parents`
+- `parent_student`
+- `users`
+
+### Routes élèves
+
+- `GET /api/v1/students/`
+- `POST /api/v1/students/`
+- `GET /api/v1/students/{id}/`
+- `PATCH /api/v1/students/{id}/`
+- `DELETE /api/v1/students/{id}/`
+- `GET /api/v1/students/{id}/history/`
+- `POST /api/v1/students/{id}/enroll/`
+- `POST /api/v1/students/{id}/promote/`
+- `GET /api/v1/students/export/pdf/`
+- `GET /api/v1/students/export/excel/`
+- `GET /api/v1/students/swagger/`
+
+### Swagger
+
+La documentation OpenAPI JSON des routes élèves est exposée via `GET /api/v1/students/swagger/`.
+
+Cette spec couvre les tests du flux parent/eleve et permet de verifier rapidement:
+
+- les champs attendus a la creation d'un eleve
+- les operations d'enrôlement et de promotion
+- l'historique d'un eleve
+- les exports asynchrones PDF et Excel
+- la creation automatique du compte parent
+
+### Flux parent
+
+- `ParentAccountService.create_from_student(student_id, guardians)` cree les comptes parent, les lie a l'eleve et declenche l'envoi des identifiants temporaires.
+- `ParentAccountService.suspend(student_id)` met tous les comptes relies en `suspended`.
+- `ParentAccountService.reactivate(student_id)` remet tous les comptes relies en `active`.
+
+### Notes d'implementation
+
+- Le champ `medical` est stocke chiffré via `cryptography.fernet` dans `medical_notes`.
+- Les exports PDF et Excel restent asynchrones via Celery et retournent un `job_id`.
+- Les vues eleves utilisent `IsSuperAdmin` et n'appellent jamais Appwrite directement.
+
+## Dashboard admin
+
+Le portail admin frontend lit maintenant un resume live expose par Django et alimente par Appwrite.
+
+### Route
+
+- `GET /api/v1/admin/dashboard/`
+
+### Ce que retourne la route
+
+- nombre total de comptes
+- nombre de comptes actifs et suspendus
+- repartition par role (`superadmin`, `comptable`, `parent`)
+- les 5 derniers utilisateurs issus de la collection `users`
+
+### Service utilise
+
+- `AdminDashboardService` dans [accounts/services.py](accounts/services.py)
+
+### Insertion de donnees de test
+
+- Le script [create_and_list_users.py](create_and_list_users.py) cree des comptes Appwrite de demonstration puis liste les utilisateurs et les comptes d'authentification.
+- La commande `python manage.py create_admin_users` cree les comptes administratifs de base.
+
+## Module presence
+
+La documentation du module presence se trouve dans [docs/attendance.md](docs/attendance.md).
+
+Résumé rapide:
+
+- les absences sont saisies uniquement par le SuperAdmin
+- le repository d'absence est base sur Appwrite et ne parle jamais directement a Django ORM
+- l'enregistrement d'une absence declenche une notification asynchrone au parent
+- la justification d'une absence met a jour `is_justified` et `justification_motif`
+- les statistiques calculent un taux d'absenteisme par eleve sur une plage de dates
+- l'export presence passe par Celery et retourne un `job_id`
+
+### Routes presence
+
+- `GET /api/v1/attendance/?class_id=&student_id=&date_from=&date_to=`
+- `POST /api/v1/attendance/`
+- `PUT /api/v1/attendance/{id}/`
+- `POST /api/v1/attendance/{id}/justify/`
+- `GET /api/v1/attendance/stats/?class_id=&date_from=&date_to=`
+- `GET /api/v1/attendance/export/?format=pdf|excel`
+- `GET /api/v1/attendance/swagger/`
+- `GET /api/v1/attendance/swagger/ui/`
+
 ## Commandes utiles
 
 ### Activation de l'environnement Anaconda
@@ -187,6 +293,12 @@ conda activate base
 
 ```bash
 /home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output python manage.py test -v 2
+```
+
+### Lancer les tests flux parent/eleve
+
+```bash
+/home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output python manage.py test students.tests parents.tests -v 2
 ```
 
 ### Demarrer le serveur Django
@@ -217,11 +329,16 @@ DEBUG=False
 ALLOWED_HOSTS=
 CORS_ALLOWED_ORIGINS=
 
-APPWRITE_ENDPOINT=http://localhost/v1
+APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
 APPWRITE_PROJECT_ID=
 APPWRITE_API_KEY=
 APPWRITE_DB_ID=sgep_db
+```
 
+> [!NOTE]
+> Pour plus de détails sur la configuration cloud, consultez le [document d'intégration](docs/APPWRITE_CLOUD_INTEGRATION.md).
+
+```env
 REDIS_URL=redis://redis:6380/0
 CELERY_BROKER_URL=redis://redis:6380/1
 

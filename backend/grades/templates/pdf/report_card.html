@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Bulletin scolaire</title>
+  <style>
+    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #222; }
+    .header { text-align: center; margin-bottom: 12px; }
+    .school-name { font-size: 18px; font-weight: bold; }
+    .school-meta { font-size: 12px; color: #555; }
+    .student-info { margin: 16px 0; }
+    .student-info td { padding: 4px 8px; }
+    table.grades { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    table.grades th, table.grades td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+    table.grades th { background: #f6f6f6; }
+    .summary { margin-top: 12px; width: 100%; }
+    .signature { margin-top: 32px; text-align: right; }
+    .small { font-size: 11px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="school-name">{school_name}</div>
+    <div class="school-meta">{school_address}</div>
+  </div>
+
+  <table class="student-info">
+    <tr>
+      <td><strong>Élève :</strong> {student_name}</td>
+      <td><strong>Matricule :</strong> {matricule}</td>
+    </tr>
+    <tr>
+      <td><strong>Classe :</strong> {class_name}</td>
+      <td><strong>Période :</strong> {period}</td>
+    </tr>
+  </table>
+
+  <table class="grades">
+    <thead>
+      <tr>
+        <th>Matière</th>
+        <th>Note /20</th>
+        <th>Coefficient</th>
+        <th>Moyenne pondérée</th>
+        <th>Appréciation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {grades_rows}
+    </tbody>
+  </table>
+
+  <table class="summary">
+    <tr>
+      <td><strong>Moyenne Générale :</strong> {average}</td>
+      <td><strong>Rang :</strong> {rank}</td>
+      <td><strong>Appréciation :</strong> {general_appreciation}</td>
+    </tr>
+  </table>
+
+  <div class="signature">
+    <div class="small">Le Directeur</div>
+    <div style="margin-top:48px;">__________________________</div>
+  </div>
+</body>
+</html>

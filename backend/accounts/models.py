@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional, List
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
@@ -15,7 +16,7 @@ ACCOUNT_STATUS_SUSPENDED = "suspended"
 
 
 class UserManager(BaseUserManager):
-	def create_user(self, email: str, password: str | None = None, **extra_fields):
+	def create_user(self, email: str, password: Optional[str] = None, **extra_fields):
 		if not email:
 			raise ValueError("L'email est requis.")
 		email = self.normalize_email(email)
@@ -26,7 +27,7 @@ class UserManager(BaseUserManager):
 			user.set_unusable_password()
 		return user
 
-	def create_superuser(self, email: str, password: str | None = None, **extra_fields):
+	def create_superuser(self, email: str, password: Optional[str] = None, **extra_fields):
 		extra_fields.setdefault("role", ROLE_SUPERADMIN)
 		extra_fields.setdefault("account_status", ACCOUNT_STATUS_ACTIVE)
 		extra_fields.setdefault("is_staff", True)
@@ -67,7 +68,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 	date_joined = models.DateTimeField(default=timezone.now)
 
 	USERNAME_FIELD = "email"
-	REQUIRED_FIELDS: list[str] = []
+	REQUIRED_FIELDS: List[str] = []
 
 	objects = UserManager()
 

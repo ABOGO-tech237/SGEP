@@ -37,6 +37,16 @@ class Command(BaseCommand):
         """Execute the setup command."""
         self.stdout.write(self.style.SUCCESS("🚀 Initializing Appwrite collections for Cameroon SGEP..."))
         
+        # Create database
+        try:
+            self.service.create_database(db_id=self.db_id, name="SGEP Database")
+            self.stdout.write(self.style.SUCCESS(f"✅ Database '{self.db_id}' created"))
+        except Exception as e:
+            if "already exists" in str(e):
+                self.stdout.write(self.style.WARNING(f"⏭️  Database '{self.db_id}' already exists"))
+            else:
+                self.stdout.write(self.style.ERROR(f"❌ Error creating database '{self.db_id}': {e}"))
+        
         # Define all collections
         collections_config = {
             # Infrastructure collections
@@ -49,7 +59,9 @@ class Command(BaseCommand):
             
             # Personnel
             "students": self._get_students_schema(),
+            "student_histories": self._get_student_histories_schema(),
             "parents": self._get_parents_schema(),
+            "parent_student": self._get_parent_student_schema(),
             "users": self._get_users_schema(),
             
             # Pedagogy
@@ -110,10 +122,11 @@ class Command(BaseCommand):
         """Create an attribute in a collection."""
         try:
             attr_type = attr.pop("type")
+            key = attr.pop("key")
             self.service.create_attribute(
                 db_id=self.db_id,
                 collection_id=collection_id,
-                key=attr["key"],
+                key=key,
                 type=attr_type,
                 **attr,
             )
@@ -149,9 +162,9 @@ class Command(BaseCommand):
                 {"key": "cycle", "type": "string", "size": 50, "required": True},  # maternelle/primaire
                 {"key": "age", "type": "integer", "required": True},
                 {"key": "language", "type": "string", "size": 10, "required": False},  # fr/en
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_code", "type": "key", "attributes": ["code"]},
@@ -169,11 +182,11 @@ class Command(BaseCommand):
                 {"key": "address", "type": "string", "size": 500, "required": False},
                 {"key": "phone", "type": "string", "size": 20, "required": False},
                 {"key": "email", "type": "email", "required": False},
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
                 {"key": "deleted_at", "type": "datetime", "required": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_is_active", "type": "key", "attributes": ["is_active"]},
@@ -190,10 +203,10 @@ class Command(BaseCommand):
                 {"key": "start_date", "type": "datetime", "required": True},
                 {"key": "end_date", "type": "datetime", "required": True},
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
-                {"key": "is_active", "type": "boolean", "required": True, "default": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_active", "type": "boolean", "required": False, "default": False},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
@@ -213,10 +226,10 @@ class Command(BaseCommand):
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
                 {"key": "capacity", "type": "integer", "required": False},
                 {"key": "teacher_id", "type": "string", "size": 36, "required": False},  # Main teacher
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_level_id", "type": "key", "attributes": ["level_id"]},
@@ -241,16 +254,45 @@ class Command(BaseCommand):
                 {"key": "id_number", "type": "string", "size": 50, "required": False},  # National ID or passport (children age 6 typically don't have one)
                 {"key": "medical_notes", "type": "string", "size": 1000, "required": False},  # Allergies, treatments
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
+                {"key": "class_id", "type": "string", "size": 36, "required": False},
+                {"key": "academic_year_id", "type": "string", "size": 36, "required": False},
                 {"key": "current_level_id", "type": "string", "size": 36, "required": False},  # Current level (SIL, CP, etc)
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "parent_user_id", "type": "string", "size": 36, "required": False},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
                 {"key": "idx_matricule", "type": "key", "attributes": ["matricule"]},
+                {"key": "idx_class_id", "type": "key", "attributes": ["class_id"]},
+                {"key": "idx_academic_year_id", "type": "key", "attributes": ["academic_year_id"]},
                 {"key": "idx_is_active", "type": "key", "attributes": ["is_active"]},
+                {"key": "idx_is_deleted", "type": "key", "attributes": ["is_deleted"]},
+            ],
+        }
+
+    def _get_student_histories_schema(self) -> dict:
+        """Student histories collection schema."""
+        return {
+            "name": "Student Histories",
+            "attributes": [
+                {"key": "student_id", "type": "string", "size": 36, "required": True},
+                {"key": "action", "type": "string", "size": 50, "required": True},
+                {"key": "from_class_id", "type": "string", "size": 36, "required": False},
+                {"key": "to_class_id", "type": "string", "size": 36, "required": False},
+                {"key": "academic_year_id", "type": "string", "size": 36, "required": False},
+                {"key": "performed_by", "type": "string", "size": 36, "required": False},
+                {"key": "details", "type": "string", "size": 2000, "required": False},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
+            ],
+            "indexes": [
+                {"key": "idx_student_id", "type": "key", "attributes": ["student_id"]},
+                {"key": "idx_action", "type": "key", "attributes": ["action"]},
+                {"key": "idx_academic_year_id", "type": "key", "attributes": ["academic_year_id"]},
                 {"key": "idx_is_deleted", "type": "key", "attributes": ["is_deleted"]},
             ],
         }
@@ -267,18 +309,40 @@ class Command(BaseCommand):
                 {"key": "phone2", "type": "string", "size": 20, "required": False},  # Second phone number
                 {"key": "email", "type": "email", "required": True},
                 {"key": "user_id", "type": "string", "size": 36, "required": False},  # Link to user account
-                {"key": "account_status", "type": "string", "size": 20, "required": True, "default": "ACTIVE"},
+                {"key": "account_status", "type": "string", "size": 20, "required": False, "default": "ACTIVE"},
                 {"key": "last_renewal_date", "type": "datetime", "required": False},
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_email", "type": "key", "attributes": ["email"]},
                 {"key": "idx_phone", "type": "key", "attributes": ["phone"]},
                 {"key": "idx_account_status", "type": "key", "attributes": ["account_status"]},
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
+                {"key": "idx_is_deleted", "type": "key", "attributes": ["is_deleted"]},
+            ],
+        }
+
+    def _get_parent_student_schema(self) -> dict:
+        """Parent/student link collection schema."""
+        return {
+            "name": "Parent Student",
+            "attributes": [
+                {"key": "student_id", "type": "string", "size": 36, "required": True},
+                {"key": "parent_id", "type": "string", "size": 36, "required": False},
+                {"key": "user_id", "type": "string", "size": 36, "required": True},
+                {"key": "email", "type": "email", "required": True},
+                {"key": "relationship", "type": "string", "size": 50, "required": False},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
+            ],
+            "indexes": [
+                {"key": "idx_student_id", "type": "key", "attributes": ["student_id"]},
+                {"key": "idx_user_id", "type": "key", "attributes": ["user_id"]},
+                {"key": "idx_email", "type": "key", "attributes": ["email"]},
                 {"key": "idx_is_deleted", "type": "key", "attributes": ["is_deleted"]},
             ],
         }
@@ -294,10 +358,11 @@ class Command(BaseCommand):
                 {"key": "role", "type": "string", "size": 30, "required": True},  # SUPER_ADMIN/COMPTABLE/DIRECTEUR/PARENT
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
                 {"key": "phone", "type": "string", "size": 20, "required": False},
-                {"key": "account_status", "type": "string", "size": 20, "required": True, "default": "ACTIVE"},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "password", "type": "string", "size": 255, "required": False},
+                {"key": "account_status", "type": "string", "size": 20, "required": False, "default": "ACTIVE"},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_email", "type": "key", "attributes": ["email"]},
@@ -318,11 +383,11 @@ class Command(BaseCommand):
                 # Subjects may be defined per level/class by the administrator.
                 {"key": "level_id", "type": "string", "size": 36, "required": False},
                 {"key": "class_id", "type": "string", "size": 36, "required": False},
-                {"key": "defined_by_admin", "type": "boolean", "required": True, "default": True},
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "defined_by_admin", "type": "boolean", "required": False, "default": True},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
@@ -344,9 +409,9 @@ class Command(BaseCommand):
                 {"key": "academic_year_id", "type": "string", "size": 36, "required": True},
                 {"key": "recorded_by", "type": "string", "size": 36, "required": True},
                 {"key": "comments", "type": "string", "size": 500, "required": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_student_id", "type": "key", "attributes": ["student_id"]},
@@ -368,9 +433,9 @@ class Command(BaseCommand):
                 {"key": "reason", "type": "string", "size": 500, "required": False},
                 {"key": "academic_year_id", "type": "string", "size": 36, "required": True},
                 {"key": "recorded_by", "type": "string", "size": 36, "required": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_student_id", "type": "key", "attributes": ["student_id"]},
@@ -391,10 +456,10 @@ class Command(BaseCommand):
                 {"key": "code", "type": "string", "size": 50, "required": True},
                 {"key": "amount", "type": "double", "required": True},
                 {"key": "school_id", "type": "string", "size": 36, "required": True},
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
@@ -414,9 +479,9 @@ class Command(BaseCommand):
                 {"key": "amount", "type": "double", "required": True},
                 {"key": "status", "type": "string", "size": 20, "required": True},
                 {"key": "due_date", "type": "datetime", "required": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_student_id", "type": "key", "attributes": ["student_id"]},
@@ -437,9 +502,9 @@ class Command(BaseCommand):
                 {"key": "reference", "type": "string", "size": 100, "required": False},
                 {"key": "status", "type": "string", "size": 20, "required": True},
                 {"key": "recorded_by", "type": "string", "size": 36, "required": True},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_invoice_id", "type": "key", "attributes": ["invoice_id"]},
@@ -459,9 +524,9 @@ class Command(BaseCommand):
                 {"key": "file_path", "type": "string", "size": 500, "required": False},
                 {"key": "status", "type": "string", "size": 20, "required": True},  # draft/published
                 {"key": "generated_at", "type": "datetime", "required": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_student_id", "type": "key", "attributes": ["student_id"]},
@@ -481,10 +546,10 @@ class Command(BaseCommand):
                 {"key": "recipient_id", "type": "string", "size": 36, "required": True},
                 {"key": "subject", "type": "string", "size": 255, "required": True},
                 {"key": "body", "type": "string", "size": 5000, "required": True},
-                {"key": "is_read", "type": "boolean", "required": True, "default": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_read", "type": "boolean", "required": False, "default": False},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_recipient_id", "type": "key", "attributes": ["recipient_id"]},
@@ -503,10 +568,10 @@ class Command(BaseCommand):
                 {"key": "title", "type": "string", "size": 255, "required": True},
                 {"key": "message", "type": "string", "size": 1000, "required": True},
                 {"key": "type", "type": "string", "size": 20, "required": True},
-                {"key": "is_read", "type": "boolean", "required": True, "default": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_read", "type": "boolean", "required": False, "default": False},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_user_id", "type": "key", "attributes": ["user_id"]},
@@ -526,9 +591,9 @@ class Command(BaseCommand):
                 {"key": "file_path", "type": "string", "size": 500, "required": False},
                 {"key": "error", "type": "string", "size": 1000, "required": False},
                 {"key": "params", "type": "string", "size": 2000, "required": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_status", "type": "key", "attributes": ["status"]},
@@ -548,9 +613,9 @@ class Command(BaseCommand):
                 {"key": "resource_id", "type": "string", "size": 36, "required": False},
                 {"key": "details", "type": "string", "size": 2000, "required": False},
                 {"key": "ip_address", "type": "string", "size": 45, "required": False},
-                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_user_id", "type": "key", "attributes": ["user_id"]},
@@ -571,9 +636,9 @@ class Command(BaseCommand):
                 {"key": "start_date", "type": "datetime", "required": False},
                 {"key": "end_date", "type": "datetime", "required": False},
                 {"key": "academic_year_id", "type": "string", "size": 36, "required": True},
-                {"key": "is_active", "type": "boolean", "required": True, "default": True},
-                {"key": "created_at", "type": "datetime", "required": True},
-                {"key": "updated_at", "type": "datetime", "required": True},
+                {"key": "is_active", "type": "boolean", "required": False, "default": True},
+                {"key": "created_at", "type": "datetime", "required": False},
+                {"key": "updated_at", "type": "datetime", "required": False},
             ],
             "indexes": [
                 {"key": "idx_academic_year_id", "type": "key", "attributes": ["academic_year_id"]},

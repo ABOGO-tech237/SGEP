@@ -1,0 +1,88 @@
+version: "3.9"
+
+services:
+  appwrite:
+    image: appwrite/appwrite:1.9.0
+    container_name: appwrite
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - _APP_ENV=production
+      - _APP_DOMAIN=localhost
+      - _APP_DOMAIN_TARGET=localhost
+      - _APP_OPENSSL_KEY_V1=your-secret-key
+      - _APP_AUTH_LIMIT=5
+      - _APP_AUTH_DURATION=2592000
+      - _APP_REDIS_HOST=redis
+      - _APP_REDIS_PORT=6379
+      - _APP_DB_HOST=mariadb
+      - _APP_DB_PORT=3306
+      - _APP_DB_USER=appwrite
+      - _APP_DB_PASS=appwrite-secret
+      - _APP_DB_SCHEMA=appwrite
+      - _APP_LOGGING_HOST=influxdb
+      - _APP_LOGGING_PORT=8086
+    depends_on:
+      - redis
+      - mariadb
+      - influxdb
+    volumes:
+      - appwrite_uploads:/storage/uploads
+      - appwrite_cache:/storage/cache
+      - appwrite_config:/storage/config
+      - appwrite_certificates:/storage/certificates
+
+  redis:
+    image: redis:7
+    container_name: appwrite-redis
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mariadb:
+    image: mariadb:10.7
+    container_name: appwrite-mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=appwrite-secret
+      - MYSQL_DATABASE=appwrite
+      - MYSQL_USER=appwrite
+      - MYSQL_PASSWORD=appwrite-secret
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pappwrite-secret"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: appwrite-influxdb
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=appwrite
+      - DOCKER_INFLUXDB_INIT_PASSWORD=appwrite-secret
+      - DOCKER_INFLUXDB_INIT_ORG=appwrite
+      - DOCKER_INFLUXDB_INIT_BUCKET=appwrite
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=appwrite-secret-token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  appwrite_uploads:
+  appwrite_cache:
+  appwrite_config:
+  appwrite_certificates:
+  redis_data:
+  mariadb_data:
+  influxdb_data:

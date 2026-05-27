@@ -11,22 +11,36 @@ class AppwriteService:
         try:
             from appwrite.client import Client
             from appwrite.services.databases import Databases
-            
+
             self.client = Client()
             self.client.set_endpoint(settings.APPWRITE_ENDPOINT)
             self.client.set_project(settings.APPWRITE_PROJECT_ID)
-            self.client.set_dev_key(settings.APPWRITE_API_KEY)
+            self.client.set_key(settings.APPWRITE_API_KEY)
             self.databases = Databases(self.client)
         except Exception as e:
             raise ImportError(f"Appwrite SDK not installed or misconfigured: {e}")
 
-    def create_collection(self, db_id: str, collection_id: str, name: str):
-        """Create a new collection."""
-        return self.databases.create_collection(
+    def create_database(self, db_id: str, name: str):
+        """Create a new database."""
+        return self.databases.create(
             database_id=db_id,
-            collection_id=collection_id,
             name=name,
         )
+
+    def create_collection(self, db_id: str, collection_id: str, name: str):
+        """Create a new collection (or table in newer Appwrite versions)."""
+        try:
+            return self.databases.create_table(
+                database_id=db_id,
+                table_id=collection_id,
+                name=name,
+            )
+        except (AttributeError, TypeError):
+            return self.databases.create_collection(
+                database_id=db_id,
+                collection_id=collection_id,
+                name=name,
+            )
 
     def create_attribute(
         self,
@@ -36,8 +50,7 @@ class AppwriteService:
         type: str,
         **kwargs
     ):
-        """Create an attribute in a collection."""
-        # Map attribute types to Appwrite SDK methods
+        """Create an attribute in a collection/table."""
         type_methods = {
             "string": self.databases.create_string_attribute,
             "email": self.databases.create_email_attribute,
@@ -46,22 +59,37 @@ class AppwriteService:
             "double": self.databases.create_float_attribute,
             "datetime": self.databases.create_datetime_attribute,
         }
-        
+
         method = type_methods.get(type)
         if not method:
             raise ValueError(f"Unknown attribute type: {type}")
-        
-        return method(
-            database_id=db_id,
-            collection_id=collection_id,
-            key=key,
-            **kwargs,
-        )
+
+        try:
+            return method(
+                database_id=db_id,
+                collection_id=collection_id,
+                key=key,
+                **kwargs,
+            )
+        except TypeError:
+            return method(
+                database_id=db_id,
+                table_id=collection_id,
+                key=key,
+                **kwargs,
+            )
 
     def create_index(self, db_id: str, collection_id: str, **kwargs):
-        """Create an index in a collection."""
-        return self.databases.create_index(
-            database_id=db_id,
-            collection_id=collection_id,
-            **kwargs,
-        )
+        """Create an index in a collection/table."""
+        try:
+            return self.databases.create_index(
+                database_id=db_id,
+                collection_id=collection_id,
+                **kwargs,
+            )
+        except TypeError:
+            return self.databases.create_index(
+                database_id=db_id,
+                table_id=collection_id,
+                **kwargs,
+            )

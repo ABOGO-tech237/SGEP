@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from appwrite.exception import AppwriteException
 from appwrite.query import Query
 from django.conf import settings
@@ -17,6 +19,37 @@ class UserRepository:
         normalized = dict(document)
         normalized["id"] = document.get("$id", document.get("id"))
         return normalized
+
+    @staticmethod
+    def list(
+        filters: list[Any] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        order_desc: str | None = "created_at",
+    ) -> dict:
+        queries: list[Any] = list(filters or [])
+        queries.append(Query.limit(limit))
+        queries.append(Query.offset(offset))
+        if order_desc:
+            queries.append(Query.order_desc(order_desc))
+
+        try:
+            response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, queries)
+            response["documents"] = [
+                UserRepository._normalize_user(document)
+                for document in response.get("documents", [])
+            ]
+            return response
+        except AppwriteException:
+            raise
+
+    @staticmethod
+    def count(filters: list[Any] | None = None) -> int:
+        try:
+            response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, filters or [])
+            return int(response.get("total", 0))
+        except AppwriteException:
+            raise
 
     @staticmethod
     def get_by_email(email: str) -> dict | None:
