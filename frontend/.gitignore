@@ -41,7 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 .env.local
-.env
+.env*
 docs/*
 node_modules/*
 node_modules/
