@@ -1,8 +1,8 @@
 """
 Django management command to initialize Appwrite collections and schemas.
-Idempotent: Safely handles existing collections, attributes, and indexes.
-Based on CDC (Cahier des Charges) SGEP specifications.
-Adapted for Cameroon primary education system.
+Idempotent: safely handles existing collections, attributes, and indexes.
+Configured to run against Appwrite Cloud through the server API key stored
+in environment variables.
 """
 
 from django.core.management.base import BaseCommand
@@ -239,19 +239,26 @@ class Command(BaseCommand):
                 {"key": "birth_place", "type": "string", "size": 100, "required": True},
                 {"key": "gender", "type": "string", "size": 10, "required": True},  # M/F
                 {"key": "id_number", "type": "string", "size": 50, "required": False},  # National ID or passport (children age 6 typically don't have one)
-                {"key": "medical_notes", "type": "string", "size": 1000, "required": False},  # Allergies, treatments
+                {"key": "medical", "type": "string", "size": 4000, "required": False, "encrypt": True},  # Encrypted JSON payload
+                {"key": "history", "type": "text", "required": False},  # Enrollment and promotion audit trail
+                {"key": "search_index", "type": "text", "required": False},  # Denormalized search helper
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
-                {"key": "current_level_id", "type": "string", "size": 36, "required": False},  # Current level (SIL, CP, etc)
+                {"key": "class_id", "type": "string", "size": 36, "required": False},
+                {"key": "academic_year_id", "type": "string", "size": 36, "required": False},
                 {"key": "is_active", "type": "boolean", "required": True, "default": True},
                 {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
+                {"key": "deleted_at", "type": "datetime", "required": False},
                 {"key": "created_at", "type": "datetime", "required": True},
                 {"key": "updated_at", "type": "datetime", "required": True},
             ],
             "indexes": [
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
                 {"key": "idx_matricule", "type": "key", "attributes": ["matricule"]},
+                {"key": "idx_class_id", "type": "key", "attributes": ["class_id"]},
+                {"key": "idx_academic_year_id", "type": "key", "attributes": ["academic_year_id"]},
                 {"key": "idx_is_active", "type": "key", "attributes": ["is_active"]},
                 {"key": "idx_is_deleted", "type": "key", "attributes": ["is_deleted"]},
+                {"key": "idx_search_index", "type": "fulltext", "attributes": ["search_index"]},
             ],
         }
 

@@ -14,6 +14,7 @@ APPWRITE_ENDPOINT = config("APPWRITE_ENDPOINT", default="http://localhost/v1")
 APPWRITE_PROJECT_ID = config("APPWRITE_PROJECT_ID", default="")
 APPWRITE_API_KEY = config("APPWRITE_API_KEY", default="")
 APPWRITE_DB_ID = config("APPWRITE_DB_ID", default="sgep_db")
+MEDICAL_ENCRYPTION_KEY = config("MEDICAL_ENCRYPTION_KEY", default="")
 
 REDIS_URL = config("REDIS_URL", default="redis://redis:6380/0")
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6380/1")
@@ -40,6 +41,8 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "core",
     "accounts",
+    "parents",
+    "students",
 ]
 
 MIDDLEWARE = [

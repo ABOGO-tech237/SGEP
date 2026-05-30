@@ -154,6 +154,20 @@ La dependance suivante a ete ajoutee dans [requirements.txt](requirements.txt):
 
 - `django-ratelimit`
 
+## Appwrite Cloud
+
+Le backend cible maintenant Appwrite Cloud au lieu d'une instance locale Docker.
+
+Variables importantes:
+
+- `APPWRITE_ENDPOINT=https://<your-region>.cloud.appwrite.io/v1`
+- `APPWRITE_PROJECT_ID=<your-project-id>`
+- `APPWRITE_API_KEY=<server-api-key>`
+- `APPWRITE_DB_ID=sgep_db`
+- `MEDICAL_ENCRYPTION_KEY=<fernet-key>`
+
+Le guide d'integration se trouve dans [docs/appwrite-cloud-integration.md](docs/appwrite-cloud-integration.md).
+
 ## Tests
 
 Des tests API cibles ont ete ajoutes dans [accounts/tests.py](accounts/tests.py).
@@ -217,10 +231,11 @@ DEBUG=False
 ALLOWED_HOSTS=
 CORS_ALLOWED_ORIGINS=
 
-APPWRITE_ENDPOINT=http://localhost/v1
+APPWRITE_ENDPOINT=https://<your-region>.cloud.appwrite.io/v1
 APPWRITE_PROJECT_ID=
 APPWRITE_API_KEY=
 APPWRITE_DB_ID=sgep_db
+MEDICAL_ENCRYPTION_KEY=
 
 REDIS_URL=redis://redis:6380/0
 CELERY_BROKER_URL=redis://redis:6380/1

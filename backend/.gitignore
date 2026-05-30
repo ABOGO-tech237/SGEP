@@ -11,7 +11,7 @@
 .project/complete_drafts.txt
 .project/localProjectSettings.json
 copilot-messages.log
-
+PROMPTS.md
 # Archive formats
 *.zip
 *.rar
