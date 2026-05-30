@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { decodeJwt } from "jose";
 import { TEAM_IDS, USER_ROLES } from "@/lib/auth/constants";
 import { LoginSchema } from "@/lib/types/auth";
 import type { LoginApiResponse, LoginApiRole } from "@/lib/types/auth";
@@ -56,16 +57,39 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const djangoData = (await djangoRes.json()) as {
-    access: string;
-    role: string;
-    user: { id: string; email: string; name: string };
+    access_token?: string;
+    refresh_token?: string;
+    access?: string;
+    refresh?: string;
   };
-  const role = normalizeRole(djangoData.role);
+
+  const accessToken = djangoData.access_token ?? djangoData.access;
+  const refreshToken = djangoData.refresh_token ?? djangoData.refresh;
+  if (!accessToken || !refreshToken) {
+    return Response.json(
+      { error: "Service unavailable." },
+      { status: 502 },
+    );
+  }
+
+  const jwtPayload = decodeJwt(accessToken) as {
+    role?: string;
+    email?: string;
+    account_status?: string;
+    student_id?: string | null;
+    user_id?: string;
+    sub?: string;
+  };
+
+  const role = normalizeRole(jwtPayload.role ?? USER_ROLES.ADMIN);
+  const email = jwtPayload.email ?? "";
+  const userId = jwtPayload.user_id ?? jwtPayload.sub ?? "";
+  const name = email || userId || "User";
 
   const cookieStore = await cookies();
   const isProd = process.env.NODE_ENV === "production";
 
-  cookieStore.set(SESSION_COOKIE, djangoData.access, {
+  cookieStore.set(SESSION_COOKIE, accessToken, {
     httpOnly: true,
     secure: isProd,
     sameSite: "strict",
@@ -84,9 +108,9 @@ export async function POST(request: Request): Promise<Response> {
   const responseBody: LoginApiResponse = {
     role,
     user: {
-      id: djangoData.user.id,
-      email: djangoData.user.email,
-      name: djangoData.user.name,
+      id: userId,
+      email,
+      name,
       role,
       teamId: TEAM_IDS[role],
     },

@@ -9,7 +9,13 @@ from accounts.repository import UserRepository
 
 class AppwriteJWTAuthentication(JWTAuthentication):
     def get_user(self, validated_token):
-        user_id = validated_token.get(self.user_id_claim)
+        # Support different SimpleJWT versions: prefer the configured claim
+        # attribute when available, otherwise fall back to common claims.
+        if hasattr(self, "user_id_claim") and self.user_id_claim:
+            user_id = validated_token.get(self.user_id_claim)
+        else:
+            user_id = validated_token.get("user_id") or validated_token.get("sub")
+
         if not user_id:
             raise InvalidToken("Token sans user_id.")
 

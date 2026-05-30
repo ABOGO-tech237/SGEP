@@ -158,9 +158,7 @@ export default async function AdminDashboard() {
         <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-card shrink-0">
           <div>
             <h1 className="text-lg font-semibold">Dashboard</h1>
-            <p className="text-xs text-muted-foreground">
-              Live sync with Django and Appwrite
-            </p>
+            <p className="text-sm text-muted-foreground">Overview of recent activity and stats</p>  
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm">
@@ -193,10 +191,8 @@ export default async function AdminDashboard() {
             <div className="col-span-2 rounded-xl border border-border bg-card">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div>
-                  <h2 className="text-sm font-semibold">Recent Appwrite Users</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Latest records created in the users collection.
-                  </p>
+                  <h2 className="text-sm font-semibold">Recents Users</h2>
+                  <p className="text-xs text-muted-foreground mt-1">  Last 5 users</p>
                 </div>
                 <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors">
                   View all <ChevronRight className="size-3" />
