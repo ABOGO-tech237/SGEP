@@ -65,6 +65,22 @@ class UserRepository:
         except AppwriteException:
             raise
 
+    @staticmethod
+    def list_by_student_id(student_id: str) -> list[dict]:
+        try:
+            response = databases.list_documents(
+                DB_ID,
+                USERS_COLLECTION_ID,
+                [
+                    Query.equal("student_id", [student_id]),
+                    Query.equal("role", ["parent"]),
+                    Query.equal("is_deleted", [False]),
+                ],
+            )
+            return [UserRepository._normalize_user(document) for document in response.get("documents", [])]
+        except AppwriteException:
+            raise
+
 
 class RefreshTokenBlacklistRepository:
     @staticmethod

@@ -111,6 +111,9 @@ class StudentService:
         student = StudentRepository.create(payload)
         if guardians:
             ParentAccountService.create_from_student(student["id"], guardians)
+        from core.audit import log_action
+
+        log_action("system", "CREATE", "students", student["id"], {"matricule": student.get("matricule", "")}, "")
         return student
 
     @staticmethod
@@ -130,7 +133,11 @@ class StudentService:
 
         payload["search_index"] = StudentService._build_search_index({**existing, **payload})
         payload["updated_at"] = StudentService._now()
-        return StudentRepository.update(student_id, payload)
+        updated = StudentRepository.update(student_id, payload)
+        from core.audit import log_action
+
+        log_action("system", "UPDATE", "students", student_id, validated_data, "")
+        return updated
 
     @staticmethod
     def soft_delete(student_id: str) -> dict:

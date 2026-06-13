@@ -168,6 +168,26 @@ Variables importantes:
 
 Le guide d'integration se trouve dans [docs/appwrite-cloud-integration.md](docs/appwrite-cloud-integration.md).
 
+## Documentation API (Swagger)
+
+La documentation interactive OpenAPI est disponible via **drf-spectacular** :
+
+| URL | Interface |
+|-----|-----------|
+| `/api/docs/` | Swagger UI |
+| `/api/redoc/` | ReDoc |
+| `/api/schema/` | Schéma OpenAPI brut |
+
+Guide complet : [docs/swagger.md](docs/swagger.md)
+
+Pour s'authentifier dans Swagger UI : login via `POST /api/v1/auth/login/`, puis **Authorize** avec `Bearer <access_token>`.
+
+Générer le schéma en fichier :
+
+```bash
+python manage.py spectacular --color --file schema.yml
+```
+
 ## Tests
 
 Des tests API cibles ont ete ajoutes dans [accounts/tests.py](accounts/tests.py).

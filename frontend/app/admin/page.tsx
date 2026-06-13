@@ -1,94 +1,45 @@
+import { headers } from "next/headers";
 import {
-  Users,
-  GraduationCap,
-  BookOpen,
-  TrendingUp,
   Bell,
+  BookOpen,
+  ChevronRight,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
   LogOut,
   Settings,
-  LayoutDashboard,
+  TrendingUp,
   UserCheck,
-  FileText,
-  ChevronRight,
+  Users,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import type { AdminDashboardResponse } from "@/lib/types/admin";
 
-const stats = [
-  {
-    label: "Total Students",
-    value: "1,284",
-    change: "+12 this month",
-    positive: true,
+export const dynamic = "force-dynamic";
+
+const STAT_DECORATIONS = {
+  "Total Students": {
     icon: GraduationCap,
     color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
   },
-  {
-    label: "Teaching Staff",
-    value: "87",
-    change: "+3 this term",
-    positive: true,
+  "Active Students": {
     icon: Users,
     color:
       "bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400",
   },
-  {
-    label: "Active Classes",
-    value: "42",
-    change: "Across 6 grades",
-    positive: null,
-    icon: BookOpen,
+  "Inactive Students": {
+    icon: TrendingUp,
     color:
       "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
   },
-  {
-    label: "Avg. Attendance",
-    value: "94.2%",
-    change: "+1.4% vs last week",
-    positive: true,
-    icon: TrendingUp,
+  "Classes Represented": {
+    icon: BookOpen,
     color:
       "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
   },
-];
-
-const recentActivity = [
-  {
-    name: "Emily Asante",
-    action: "Enrolled",
-    grade: "Grade 3B",
-    status: "ACTIVE" as const,
-    time: "2 min ago",
-  },
-  {
-    name: "Kwame Mensah",
-    action: "Fee overdue",
-    grade: "Grade 5A",
-    status: "OVERDUE" as const,
-    time: "1 hr ago",
-  },
-  {
-    name: "Abena Owusu",
-    action: "Transfer request",
-    grade: "Grade 2C",
-    status: "PENDING" as const,
-    time: "3 hr ago",
-  },
-  {
-    name: "Kofi Boateng",
-    action: "Profile updated",
-    grade: "Grade 4B",
-    status: "ACTIVE" as const,
-    time: "Yesterday",
-  },
-  {
-    name: "Akosua Darko",
-    action: "Suspended",
-    grade: "Grade 6A",
-    status: "SUSPENDED" as const,
-    time: "Yesterday",
-  },
-];
+} as const;
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, active: true },
@@ -99,7 +50,31 @@ const navItems = [
   { label: "Settings", icon: Settings, active: false },
 ];
 
-export default function AdminDashboard() {
+async function loadAdminDashboard(): Promise<AdminDashboardResponse | null> {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host");
+  if (!host) {
+    return null;
+  }
+
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
+  const response = await fetch(
+    new URL("/api/admin/dashboard", `${protocol}://${host}`),
+    {
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as AdminDashboardResponse;
+}
+
+export default async function AdminDashboard() {
+  const dashboard = await loadAdminDashboard();
+
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Sidebar */}
@@ -149,7 +124,9 @@ export default function AdminDashboard() {
           <div>
             <h1 className="text-lg font-semibold">Dashboard</h1>
             <p className="text-xs text-muted-foreground">
-              Friday, 23 May 2026 · Term 2
+              {dashboard
+                ? `Live data synced ${new Date(dashboard.generated_at).toLocaleString("en-GB")}`
+                : "Live dashboard unavailable"}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -165,10 +142,20 @@ export default function AdminDashboard() {
 
         {/* Scrollable body */}
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          {!dashboard ? (
+            <div className="rounded-xl border border-dashed border-border bg-card/60 px-5 py-4 text-sm text-muted-foreground">
+              The admin dashboard data could not be loaded. Check the session
+              and backend connection, then refresh.
+            </div>
+          ) : null}
+
           {/* Stat cards */}
           <div className="grid grid-cols-4 gap-4">
-            {stats.map(
-              ({ label, value, change, positive, icon: Icon, color }) => (
+            {(dashboard?.stats ?? []).map(({ label, value, change, positive }) => {
+              const decoration = STAT_DECORATIONS[label as keyof typeof STAT_DECORATIONS];
+              const Icon = decoration?.icon ?? TrendingUp;
+
+              return (
                 <div
                   key={label}
                   className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3"
@@ -178,7 +165,7 @@ export default function AdminDashboard() {
                       {label}
                     </p>
                     <span
-                      className={`size-8 rounded-lg flex items-center justify-center ${color}`}
+                      className={`size-8 rounded-lg flex items-center justify-center ${decoration?.color ?? "bg-muted text-muted-foreground"}`}
                     >
                       <Icon className="size-4" />
                     </span>
@@ -190,8 +177,8 @@ export default function AdminDashboard() {
                     {change}
                   </p>
                 </div>
-              ),
-            )}
+              );
+            })}
           </div>
 
           {/* Lower section */}
@@ -225,10 +212,10 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentActivity.map(
-                    ({ name, action, grade, status, time }) => (
+                  {(dashboard?.recent_activity ?? []).map(
+                    ({ id, name, action, grade, status, time }) => (
                       <tr
-                        key={name}
+                        key={id}
                         className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
                       >
                         <td className="px-5 py-3 font-medium">{name}</td>

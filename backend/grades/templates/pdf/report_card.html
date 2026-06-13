@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+	<meta charset="UTF-8">
+	<title>Bulletin — {{ student.first_name }} {{ student.last_name }}</title>
+	<style>
+		body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 24px; }
+		.header { text-align: center; border-bottom: 2px solid #1a365d; padding-bottom: 12px; margin-bottom: 20px; }
+		.header h1 { margin: 0; font-size: 20px; color: #1a365d; }
+		.header p { margin: 4px 0; }
+		.info { margin-bottom: 16px; }
+		.info span { display: inline-block; margin-right: 24px; }
+		table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+		th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+		th { background: #edf2f7; font-weight: bold; }
+		.summary { margin-top: 20px; padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; }
+		.signature { margin-top: 40px; text-align: right; }
+	</style>
+</head>
+<body>
+	<div class="header">
+		<h1>{{ school.name }}</h1>
+		<p>Bulletin scolaire — {{ period }}</p>
+	</div>
+
+	<div class="info">
+		<span><strong>Élève :</strong> {{ student.first_name }} {{ student.last_name }}</span>
+		<span><strong>Matricule :</strong> {{ student.matricule }}</span>
+		<span><strong>Classe :</strong> {{ student.class_id }}</span>
+	</div>
+
+	<table>
+		<thead>
+			<tr>
+				<th>Matière</th>
+				<th>Note /20</th>
+				<th>Coefficient</th>
+				<th>Moy. pondérée</th>
+				<th>Appréciation</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for grade in grades %}
+			<tr>
+				<td>{{ grade.subject_id }}</td>
+				<td>{{ grade.value }}</td>
+				<td>{{ grade.coefficient }}</td>
+				<td>{{ grade.weighted }}</td>
+				<td>{{ grade.appreciation }}</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+
+	<div class="summary">
+		<p><strong>Moyenne générale :</strong> {{ general_average }} / 20</p>
+		<p><strong>Rang :</strong> {{ rank }}</p>
+		<p><strong>Appréciation générale :</strong> {{ general_appreciation }}</p>
+	</div>
+
+	<div class="signature">
+		<p>Le Directeur</p>
+		<p>_______________________</p>
+	</div>
+</body>
+</html>
