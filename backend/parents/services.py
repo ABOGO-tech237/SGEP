@@ -92,6 +92,21 @@ class ParentAccountService:
 		return suspended_accounts
 
 	@staticmethod
+	def suspend_by_parent_id(parent_id: str) -> dict | None:
+		parent = UserRepository.get_by_id(parent_id)
+		if not parent or parent.get("account_status") == ACCOUNT_STATUS_SUSPENDED:
+			return None
+		updated = UserRepository.update(
+			parent_id,
+			{
+				"account_status": ACCOUNT_STATUS_SUSPENDED,
+				"updated_at": ParentAccountService._now(),
+			},
+		)
+		notify_account_suspended_task.delay(parent_id)
+		return updated
+
+	@staticmethod
 	def reactivate(student_id: str) -> list[dict]:
 		reactivated_accounts: list[dict] = []
 		parents = UserRepository.list_by_student_id(student_id)

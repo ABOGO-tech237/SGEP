@@ -87,7 +87,14 @@ class PaymentService:
 		return datetime.now(timezone.utc).isoformat()
 
 	@staticmethod
-	def record(invoice_id: str, amount: float, method: str, reference: str, recorded_by: str) -> dict:
+	def record(
+		invoice_id: str,
+		amount: float,
+		method: str,
+		reference: str,
+		recorded_by: str,
+		ip_address: str = "",
+	) -> dict:
 		from finance.tasks import generate_receipt_task
 
 		invoice = InvoiceService.get(invoice_id)
@@ -116,7 +123,7 @@ class PaymentService:
 		generate_receipt_task.delay(payment["id"])
 		from core.audit import log_action
 
-		log_action(recorded_by, "CREATE", "payments", payment["id"], {"invoice_id": invoice_id, "amount": amount}, "")
+		log_action(recorded_by, "CREATE", "payments", payment["id"], {"invoice_id": invoice_id, "amount": amount}, ip_address)
 		return payment
 
 	@staticmethod

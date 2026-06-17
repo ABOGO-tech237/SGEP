@@ -100,3 +100,24 @@ class ParentPortalApiTests(SimpleTestCase):
 			response = self.client.get("/api/v1/parent/me/attendance/")
 
 		self.assertEqual(response.status_code, 200)
+
+	def test_parent_messages_list(self):
+		self.client.force_authenticate(user=self.user)
+		with patch(
+			"parents.views.MessageService.list_for_parent",
+			return_value=[{"id": "msg-1", "subject": "Question", "body": "Bonjour", "sender_id": "parent-1", "recipient_id": "admin", "is_read": False, "created_at": "2026-01-01"}],
+		):
+			response = self.client.get("/api/v1/parent/me/messages/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data), 1)
+
+	def test_parent_messages_send(self):
+		self.client.force_authenticate(user=self.user)
+		with patch(
+			"parents.views.MessageService.send_from_parent",
+			return_value={"id": "msg-2", "subject": "Info", "body": "Merci", "sender_id": str(self.user.id), "recipient_id": "admin", "is_read": False, "created_at": "2026-01-02"},
+		):
+			response = self.client.post("/api/v1/parent/me/messages/", {"subject": "Info", "body": "Merci"}, format="json")
+
+		self.assertEqual(response.status_code, 201)

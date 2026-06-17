@@ -50,7 +50,18 @@ from core.openapi_serializers import (
 	ParentProfileResponseSerializer,
 	ParentMessageCreateSerializer,
 	ReportCardStatusResponseSerializer,
+	ReportJobStatusResponseSerializer,
 	TokenResponseSerializer,
+)
+from classes.serializers import ClassSerializer, SubjectSerializer
+from classes.views import ClassDetailView, ClassListCreateView, SubjectDetailView, SubjectListCreateView
+from core.serializers import AcademicYearSerializer, AdminDashboardResponseSerializer, SchoolSerializer
+from core.views import (
+	AcademicYearDetailView,
+	AcademicYearListCreateView,
+	AdminDashboardView,
+	SchoolDetailView,
+	SchoolListCreateView,
 )
 from finance.serializers import InvoiceGenerateSerializer, InvoiceSerializer, PaymentCreateSerializer, PaymentSerializer
 from finance.views import (
@@ -73,11 +84,13 @@ from grades.views import (
 	GradeBulkCreateView,
 	GradeDetailView,
 	GradeListCreateView,
+	GradeResultsExportView,
 	ReportCardDownloadView,
 	ReportCardGenerateView,
 	ReportCardPublishView,
 	ReportCardStatusView,
 )
+from parents.serializers import ParentMessageSerializer
 from parents.views import (
 	ParentAttendanceView,
 	ParentGradesView,
@@ -105,6 +118,7 @@ from students.views import (
 	StudentListCreateView,
 	StudentPromoteView,
 )
+from reports.views import ReportJobDownloadView, ReportJobStatusView
 
 # --- Auth ---
 
@@ -318,6 +332,18 @@ extend_schema_view(
 	),
 )(GradeBulkCreateView)
 
+extend_schema_view(
+	get=extend_schema(
+		tags=["Grades"],
+		summary="Exporter les résultats en Excel",
+		parameters=[
+			OpenApiParameter("class_id", str, OpenApiParameter.QUERY, required=True),
+			OpenApiParameter("period_id", str, OpenApiParameter.QUERY, required=True),
+		],
+		responses={202: JobIdResponseSerializer},
+	),
+)(GradeResultsExportView)
+
 # --- Report cards ---
 
 extend_schema_view(
@@ -479,12 +505,143 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Messagerie — liste",
-		responses={200: OpenApiResponse(description="Liste des messages")},
+		responses={200: ParentMessageSerializer(many=True)},
 	),
 	post=extend_schema(
 		tags=["Parent Portal"],
 		summary="Messagerie — envoyer",
 		request=ParentMessageCreateSerializer,
-		responses={201: MessageResponseSerializer},
+		responses={201: ParentMessageSerializer},
 	),
 )(ParentMessagesView)
+
+# --- Core (schools & academic years) ---
+
+extend_schema_view(
+	get=extend_schema(tags=["Core"], summary="Lister les écoles", responses={200: SchoolSerializer(many=True)}),
+	post=extend_schema(
+		tags=["Core"],
+		summary="Créer une école",
+		request=SchoolSerializer,
+		responses={201: SchoolSerializer},
+	),
+)(SchoolListCreateView)
+
+extend_schema_view(
+	get=extend_schema(tags=["Core"], summary="Détail école", responses={200: SchoolSerializer}),
+	patch=extend_schema(
+		tags=["Core"],
+		summary="Modifier une école",
+		request=SchoolSerializer,
+		responses={200: SchoolSerializer},
+	),
+)(SchoolDetailView)
+
+extend_schema_view(
+	get=extend_schema(
+		tags=["Core"],
+		summary="Lister les années scolaires",
+		parameters=[OpenApiParameter("school_id", str, OpenApiParameter.QUERY)],
+		responses={200: AcademicYearSerializer(many=True)},
+	),
+	post=extend_schema(
+		tags=["Core"],
+		summary="Créer une année scolaire",
+		request=AcademicYearSerializer,
+		responses={201: AcademicYearSerializer},
+	),
+)(AcademicYearListCreateView)
+
+extend_schema_view(
+	get=extend_schema(tags=["Core"], summary="Détail année scolaire", responses={200: AcademicYearSerializer}),
+	patch=extend_schema(
+		tags=["Core"],
+		summary="Modifier une année scolaire",
+		request=AcademicYearSerializer,
+		responses={200: AcademicYearSerializer},
+	),
+)(AcademicYearDetailView)
+
+# --- Classes & subjects ---
+
+extend_schema_view(
+	get=extend_schema(
+		tags=["Classes"],
+		summary="Lister les classes",
+		parameters=[
+			OpenApiParameter("academic_year_id", str, OpenApiParameter.QUERY),
+			OpenApiParameter("level_id", str, OpenApiParameter.QUERY),
+		],
+		responses={200: ClassSerializer(many=True)},
+	),
+	post=extend_schema(
+		tags=["Classes"],
+		summary="Créer une classe",
+		request=ClassSerializer,
+		responses={201: ClassSerializer},
+	),
+)(ClassListCreateView)
+
+extend_schema_view(
+	get=extend_schema(tags=["Classes"], summary="Détail classe", responses={200: ClassSerializer}),
+	patch=extend_schema(
+		tags=["Classes"],
+		summary="Modifier une classe",
+		request=ClassSerializer,
+		responses={200: ClassSerializer},
+	),
+)(ClassDetailView)
+
+extend_schema_view(
+	get=extend_schema(
+		tags=["Classes"],
+		summary="Lister les matières",
+		parameters=[OpenApiParameter("class_id", str, OpenApiParameter.QUERY)],
+		responses={200: SubjectSerializer(many=True)},
+	),
+	post=extend_schema(
+		tags=["Classes"],
+		summary="Créer une matière",
+		request=SubjectSerializer,
+		responses={201: SubjectSerializer},
+	),
+)(SubjectListCreateView)
+
+extend_schema_view(
+	get=extend_schema(tags=["Classes"], summary="Détail matière", responses={200: SubjectSerializer}),
+	patch=extend_schema(
+		tags=["Classes"],
+		summary="Modifier une matière",
+		request=SubjectSerializer,
+		responses={200: SubjectSerializer},
+	),
+)(SubjectDetailView)
+
+# --- Report jobs ---
+
+extend_schema_view(
+	get=extend_schema(
+		tags=["Reports"],
+		summary="Statut d'un export asynchrone",
+		responses={200: ReportJobStatusResponseSerializer},
+	),
+)(ReportJobStatusView)
+
+extend_schema_view(
+	get=extend_schema(
+		tags=["Reports"],
+		summary="Télécharger un export asynchrone",
+		responses={(200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"): OpenApiResponse(description="Fichier Excel ou PDF")},
+	),
+)(ReportJobDownloadView)
+
+# --- Admin dashboard ---
+
+extend_schema_view(
+	get=extend_schema(
+		tags=["Admin"],
+		summary="Tableau de bord administrateur",
+		description="Statistiques élèves, classes, finance et activité récente depuis Appwrite.",
+		responses={200: AdminDashboardResponseSerializer},
+	),
+)(AdminDashboardView)

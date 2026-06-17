@@ -20,24 +20,51 @@ import type { AdminDashboardResponse } from "@/lib/types/admin";
 export const dynamic = "force-dynamic";
 
 const STAT_DECORATIONS = {
+  "Total élèves": {
+    icon: GraduationCap,
+    color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+  },
   "Total Students": {
     icon: GraduationCap,
     color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+  },
+  "Élèves actifs": {
+    icon: Users,
+    color:
+      "bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400",
   },
   "Active Students": {
     icon: Users,
     color:
       "bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400",
   },
+  "Élèves inactifs": {
+    icon: TrendingUp,
+    color:
+      "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
+  },
   "Inactive Students": {
     icon: TrendingUp,
     color:
       "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
   },
+  Classes: {
+    icon: BookOpen,
+    color:
+      "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
+  },
   "Classes Represented": {
     icon: BookOpen,
     color:
       "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
+  },
+  Recouvrement: {
+    icon: FileText,
+    color: "bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400",
+  },
+  Encaissements: {
+    icon: TrendingUp,
+    color: "bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-400",
   },
 } as const;
 

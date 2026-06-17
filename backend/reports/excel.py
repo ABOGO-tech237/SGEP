@@ -3,13 +3,27 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+from openpyxl.styles import Alignment, Font, PatternFill
 
 EXPORTS_DIR = Path("/srv/sgep/media/exports")
+HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+HEADER_FONT = Font(bold=True, color="FFFFFF")
 
 
 def _ensure_dir() -> Path:
 	EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 	return EXPORTS_DIR
+
+
+def _apply_excel_styles(writer: pd.ExcelWriter, sheet_name: str) -> None:
+	worksheet = writer.sheets[sheet_name]
+	for cell in worksheet[1]:
+		cell.font = HEADER_FONT
+		cell.fill = HEADER_FILL
+		cell.alignment = Alignment(horizontal="center")
+	for column_cells in worksheet.columns:
+		max_length = max(len(str(cell.value or "")) for cell in column_cells)
+		worksheet.column_dimensions[column_cells[0].column_letter].width = min(max_length + 2, 40)
 
 
 def export_students(academic_year_id: str, class_id: str | None = None, students: list[dict] | None = None) -> str:
@@ -38,6 +52,7 @@ def export_students(academic_year_id: str, class_id: str | None = None, students
 	file_path = _ensure_dir() / f"students_{academic_year_id}.xlsx"
 	with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
 		df.to_excel(writer, index=False, sheet_name="Élèves")
+		_apply_excel_styles(writer, "Élèves")
 	return str(file_path.resolve())
 
 
@@ -67,7 +82,9 @@ def export_results(class_id: str, period_id: str, averages: dict | None = None) 
 
 	df = pd.DataFrame(rows)
 	file_path = _ensure_dir() / f"results_{class_id}_{period_id}.xlsx"
-	df.to_excel(file_path, index=False, engine="openpyxl")
+	with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+		df.to_excel(writer, index=False, sheet_name="Résultats")
+		_apply_excel_styles(writer, "Résultats")
 	return str(file_path.resolve())
 
 
@@ -99,9 +116,11 @@ def export_finance(academic_year_id: str, invoices: list[dict] | None = None) ->
 	file_path = _ensure_dir() / f"finance_{academic_year_id}.xlsx"
 	with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
 		df.to_excel(writer, index=False, sheet_name="Détail")
+		_apply_excel_styles(writer, "Détail")
 		if rows:
 			summary = df.groupby("Type frais")[["Montant facturé", "Montant payé"]].sum().reset_index()
 			summary.to_excel(writer, index=False, sheet_name="Récapitulatif")
+			_apply_excel_styles(writer, "Récapitulatif")
 	return str(file_path.resolve())
 
 
@@ -130,5 +149,7 @@ def export_attendance(class_id: str, date_from: str, date_to: str, stats: list[d
 
 	df = pd.DataFrame(rows)
 	file_path = _ensure_dir() / f"attendance_{class_id}.xlsx"
-	df.to_excel(file_path, index=False, engine="openpyxl")
+	with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+		df.to_excel(writer, index=False, sheet_name="Absences")
+		_apply_excel_styles(writer, "Absences")
 	return str(file_path.resolve())

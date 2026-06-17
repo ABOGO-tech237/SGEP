@@ -32,3 +32,7 @@ The `MEDICAL_ENCRYPTION_KEY` is used to encrypt and decrypt the `medical` payloa
 1. Populate `.env` with the cloud values.
 2. Run `python manage.py check`.
 3. Run the Appwrite setup command against the cloud project.
+4. Run `python manage.py verify_appwrite` to confirm connectivity.
+5. Run integration tests: `python manage.py test core.tests_appwrite_integration -v 2`.
+
+See [appwrite-integration-tests.md](appwrite-integration-tests.md) for the full testing guide.

@@ -87,7 +87,7 @@ class GradeService:
 		return GradeService._with_period_id(GradeRepository.update(grade_id, payload))
 
 	@staticmethod
-	def bulk_input(validated_data: list[dict], recorded_by: str) -> list[dict]:
+	def bulk_input(validated_data: list[dict], recorded_by: str, ip_address: str = "") -> list[dict]:
 		payloads: list[dict] = []
 		for item in validated_data:
 			subject = SubjectRepository.get(item["subject_id"])
@@ -110,7 +110,7 @@ class GradeService:
 		created = GradeRepository.bulk_create(payloads)
 		from core.audit import log_action
 
-		log_action(recorded_by, "CREATE", "grades", "bulk", {"count": len(created)}, "")
+		log_action(recorded_by, "CREATE", "grades", "bulk", {"count": len(created)}, ip_address)
 		return [GradeService._with_period_id(grade) for grade in created]
 
 	@staticmethod

@@ -37,6 +37,15 @@ class ReportCardStatusResponseSerializer(serializers.Serializer):
 	file_path = serializers.CharField(required=False, allow_blank=True)
 
 
+class ReportJobStatusResponseSerializer(serializers.Serializer):
+	job_id = serializers.CharField()
+	status = serializers.CharField()
+	progress = serializers.IntegerField()
+	file_path = serializers.CharField(required=False, allow_blank=True)
+	error = serializers.CharField(required=False, allow_blank=True)
+	type = serializers.CharField(required=False, allow_blank=True)
+
+
 class ParentProfileResponseSerializer(serializers.Serializer):
 	id = serializers.CharField()
 	email = serializers.CharField()

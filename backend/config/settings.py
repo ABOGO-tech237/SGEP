@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "core",
     "accounts",
+    "classes",
     "parents",
     "students",
     "notifications",

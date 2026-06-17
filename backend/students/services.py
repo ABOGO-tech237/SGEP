@@ -85,7 +85,7 @@ class StudentService:
         return student
 
     @staticmethod
-    def create(validated_data: dict) -> dict:
+    def create(validated_data: dict, user_id: str = "system", ip_address: str = "") -> dict:
         payload = dict(validated_data)
         guardians = payload.pop("guardians", [])
         medical = payload.pop("medical", None)
@@ -113,11 +113,11 @@ class StudentService:
             ParentAccountService.create_from_student(student["id"], guardians)
         from core.audit import log_action
 
-        log_action("system", "CREATE", "students", student["id"], {"matricule": student.get("matricule", "")}, "")
+        log_action(user_id, "CREATE", "students", student["id"], {"matricule": student.get("matricule", "")}, ip_address)
         return student
 
     @staticmethod
-    def update(student_id: str, validated_data: dict) -> dict:
+    def update(student_id: str, validated_data: dict, user_id: str = "system", ip_address: str = "") -> dict:
         existing = StudentService.get(student_id)
         payload = dict(validated_data)
 
@@ -136,7 +136,7 @@ class StudentService:
         updated = StudentRepository.update(student_id, payload)
         from core.audit import log_action
 
-        log_action("system", "UPDATE", "students", student_id, validated_data, "")
+        log_action(user_id, "UPDATE", "students", student_id, validated_data, ip_address)
         return updated
 
     @staticmethod

@@ -20,11 +20,15 @@ Le backend SGEP expose une documentation interactive via **drf-spectacular**.
 ## Tags documentés
 
 - **Auth** — login, refresh, logout, change-password
+- **Core** — écoles, années scolaires
+- **Classes** — classes et matières
 - **Students** — CRUD élèves, export, promotion
 - **Attendance** — absences, retards, stats, export
 - **Grades** — notes et saisie en masse
 - **Report Cards** — génération, statut, téléchargement, publication
 - **Finance** — factures, paiements, dashboard (Comptable)
+- **Admin** — tableau de bord administrateur
+- **Reports** — statut et téléchargement des exports async
 - **Parent Portal** — portail parent (notes, bulletins, factures…)
 
 ## Fichiers source

@@ -55,6 +55,7 @@ class FinancePaymentCreateView(APIView):
 			data["method"],
 			data.get("reference", ""),
 			str(request.user.id),
+			ip_address=getattr(request, "audit_ip", ""),
 		)
 		return Response(PaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
 

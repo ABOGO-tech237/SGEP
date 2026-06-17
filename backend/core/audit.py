@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from appwrite.exception import AppwriteException
 from django.conf import settings
 
 from config.appwrite_client import databases
@@ -31,5 +32,5 @@ def log_action(
 	}
 	try:
 		databases.create_document(DB_ID, COLLECTION_ID, "unique()", payload)
-	except Exception:
+	except AppwriteException:
 		pass

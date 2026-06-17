@@ -96,13 +96,33 @@ def notify_bulletin_published_task(self, student_id: str, period_label: str, dry
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=120)
 def notify_payment_overdue_task(self, invoice_id: str, overdue_days: int, dry_run: bool = False) -> None:
-	title = "Facture en retard"
-	message = f"La facture {invoice_id} est en retard de {overdue_days} jours."
-	notification = _create_notification_log(invoice_id, title, message, "payment_overdue")
+	from finance.repository import InvoiceRepository
+
+	invoice = InvoiceRepository.get(invoice_id)
+	if not invoice:
+		return
+
+	student_id = invoice.get("student_id", "")
+	parent = _get_parent_for_student(student_id)
+	if not parent:
+		return
+
+	if overdue_days >= 30:
+		urgency = "dernier rappel"
+	elif overdue_days >= 15:
+		urgency = "rappel important"
+	else:
+		urgency = "rappel"
+
+	title = f"Facture en retard — {urgency}"
+	message = (
+		f"La facture {invoice.get('number', invoice_id)} est en retard de {overdue_days} jours. "
+		f"Montant dû : {invoice.get('amount', 0)}."
+	)
+	notification = _create_notification_log(parent["id"], title, message, "payment_overdue")
 
 	try:
-		if not dry_run:
-			_send_email(title, message, settings.DEFAULT_FROM_EMAIL, dry_run=False)
+		_send_email(title, message, parent["email"], dry_run)
 		NotificationRepository.update(notification["id"], {"status": NOTIFICATION_STATUS_SENT, "sent_at": _now()})
 	except Exception as exc:
 		NotificationRepository.update(notification["id"], {"status": NOTIFICATION_STATUS_FAILED, "error": str(exc)})

@@ -39,6 +39,13 @@ export interface AdminDashboardActivity {
 
 export interface AdminDashboardResponse {
   generated_at: string;
+  academic_year?: { id: string; name: string } | null;
   stats: AdminDashboardStat[];
+  finance?: {
+    total_billed: number;
+    total_collected: number;
+    recovery_rate: number;
+    overdue_count: number;
+  };
   recent_activity: AdminDashboardActivity[];
 }

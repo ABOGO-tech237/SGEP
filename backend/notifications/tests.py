@@ -56,7 +56,13 @@ class NotificationTaskTests(SimpleTestCase):
 		mail_mock.assert_not_called()
 
 	def test_notify_payment_overdue_task_dry_run(self):
-		with patch(
+		parent = {"id": "parent-1", "email": "parent@example.com"}
+		invoice = {"id": "inv-1", "student_id": "stu-1", "number": "INV-001", "amount": 500}
+
+		with patch("finance.repository.InvoiceRepository.get", return_value=invoice), patch(
+			"notifications.tasks.UserRepository.list_by_student_id",
+			return_value=[parent],
+		), patch(
 			"notifications.tasks.NotificationRepository.create",
 			return_value={"id": "notif-4"},
 		), patch("notifications.tasks.NotificationRepository.update"), patch("notifications.tasks.send_mail") as mail_mock:

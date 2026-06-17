@@ -12,6 +12,8 @@ DB_ID = settings.APPWRITE_DB_ID
 COLLECTION_ID = "students"
 REPORT_JOBS_COLLECTION_ID = "report_jobs"
 
+from reports.repository import ReportJobRepository  # noqa: E402
+
 
 def _normalize_document(document: dict) -> dict:
     normalized = dict(document)
@@ -106,32 +108,4 @@ class StudentRepository:
                 return None
             return _normalize_document(documents[0])
         except AppwriteException:
-            raise
-
-
-class ReportJobRepository:
-    @staticmethod
-    def create(data: dict) -> dict:
-        try:
-            document = databases.create_document(DB_ID, REPORT_JOBS_COLLECTION_ID, "unique()", data)
-            return _normalize_document(document)
-        except AppwriteException:
-            raise
-
-    @staticmethod
-    def update(job_id: str, data: dict) -> dict:
-        try:
-            document = databases.update_document(DB_ID, REPORT_JOBS_COLLECTION_ID, job_id, data)
-            return _normalize_document(document)
-        except AppwriteException:
-            raise
-
-    @staticmethod
-    def get(job_id: str) -> dict | None:
-        try:
-            document = databases.get_document(DB_ID, REPORT_JOBS_COLLECTION_ID, job_id)
-            return _normalize_document(document)
-        except AppwriteException as exc:
-            if getattr(exc, "code", None) == 404:
-                return None
             raise

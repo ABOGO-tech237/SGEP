@@ -147,6 +147,20 @@ class UserRepository:
         except AppwriteException:
             raise
 
+    @staticmethod
+    def list_by_role(role: str, account_status: str | None = None) -> list[dict]:
+        queries: list = [
+            Query.equal("role", [role]),
+            Query.equal("is_deleted", [False]),
+        ]
+        if account_status:
+            queries.append(Query.equal("account_status", [account_status]))
+        try:
+            response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, queries)
+            return [UserRepository._normalize_user(document) for document in response.get("documents", [])]
+        except AppwriteException:
+            raise
+
 
 class RefreshTokenBlacklistRepository:
     @staticmethod

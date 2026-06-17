@@ -6,11 +6,14 @@ import core.openapi  # noqa: F401 — enregistre les annotations OpenAPI
 
 api_v1_urlpatterns = [
     path("", include("accounts.urls")),
+    path("", include("core.urls")),
+    path("", include("classes.urls")),
     path("", include("students.urls")),
     path("", include("attendance.urls")),
     path("", include("grades.urls")),
     path("", include("finance.urls")),
     path("", include("parents.urls")),
+    path("", include("reports.urls")),
 ]
 
 urlpatterns = [

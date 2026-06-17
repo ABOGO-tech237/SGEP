@@ -11,6 +11,8 @@ from attendance.services import AttendanceService
 from core.exceptions import AccountSuspendedError, NotFoundError
 from finance.services import InvoiceService, PaymentService
 from grades.services import GradeService, ReportCardService
+from parents.message_services import MessageService
+from parents.serializers import ParentMessageCreateSerializer, ParentMessageSerializer
 from students.services import StudentService
 
 
@@ -134,8 +136,16 @@ class ParentMessagesView(APIView):
 
 	def get(self, request):
 		_check_active_parent(request.user)
-		return Response([])
+		messages = MessageService.list_for_parent(str(request.user.id))
+		return Response(ParentMessageSerializer(messages, many=True).data)
 
 	def post(self, request):
 		_check_active_parent(request.user)
-		return Response({"detail": "Message envoyé."}, status=status.HTTP_201_CREATED)
+		serializer = ParentMessageCreateSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		message = MessageService.send_from_parent(
+			str(request.user.id),
+			serializer.validated_data["subject"],
+			serializer.validated_data["body"],
+		)
+		return Response(ParentMessageSerializer(message).data, status=status.HTTP_201_CREATED)

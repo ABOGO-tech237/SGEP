@@ -22,6 +22,37 @@ from .services import GradeService, ReportCardService
 from .tasks import generate_class_report_cards_task
 
 
+class GradeResultsExportView(APIView):
+	permission_classes = [IsSuperAdmin]
+
+	def get(self, request):
+		import json
+
+		from reports.tasks import generate_results_excel_task
+		from students.repository import ReportJobRepository
+
+		class_id = request.query_params.get("class_id", "")
+		period_id = request.query_params.get("period_id", "")
+		if not class_id or not period_id:
+			raise NotFoundError("class_id et period_id sont requis.")
+
+		job = ReportJobRepository.create(
+			{
+				"type": "results_excel",
+				"status": "pending",
+				"requested_by": str(request.user.id),
+				"file_path": "",
+				"error": "",
+				"params": json.dumps({"class_id": class_id, "period_id": period_id}, ensure_ascii=True),
+				"is_deleted": False,
+				"created_at": GradeService._now(),
+				"updated_at": GradeService._now(),
+			}
+		)
+		generate_results_excel_task.delay(job["id"], {"class_id": class_id, "period_id": period_id})
+		return Response({"job_id": job["id"]}, status=status.HTTP_202_ACCEPTED)
+
+
 class GradeListCreateView(APIView):
 	permission_classes = [IsSuperAdmin]
 
@@ -56,7 +87,11 @@ class GradeBulkCreateView(APIView):
 	def post(self, request):
 		serializer = BulkGradeCreateSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
-		grades = GradeService.bulk_input(serializer.validated_data["grades"], str(request.user.id))
+		grades = GradeService.bulk_input(
+			serializer.validated_data["grades"],
+			str(request.user.id),
+			ip_address=getattr(request, "audit_ip", ""),
+		)
 		return Response(GradeSerializer(grades, many=True).data, status=status.HTTP_201_CREATED)
 
 
