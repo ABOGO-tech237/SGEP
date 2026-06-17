@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from appwrite.exception import AppwriteException
 from appwrite.query import Query
 from django.conf import settings
@@ -14,9 +16,67 @@ REFRESH_TOKEN_BLACKLIST_COLLECTION_ID = "refresh_token_blacklist"
 class UserRepository:
     @staticmethod
     def _normalize_user(document: dict) -> dict:
-        normalized = dict(document)
-        normalized["id"] = document.get("$id", document.get("id"))
+        # Appwrite Document objects have custom fields in .data attribute
+        if hasattr(document, "data"):
+            raw_document = dict(document.data or {})
+        elif hasattr(document, "model_dump"):
+            raw_document = document.model_dump()
+        elif isinstance(document, dict):
+            raw_document = dict(document)
+        else:
+            raw_document = dict(document)
+
+        normalized = dict(raw_document)
+
+        # Ensure we have an 'id' field for consistency
+        if "id" not in normalized:
+            if isinstance(document, dict):
+                normalized["id"] = document.get("$id")
+            else:
+                normalized["id"] = getattr(document, "id", None)
         return normalized
+    @staticmethod
+    def list(
+        filters: list[Any] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        order_desc: str | None = "created_at",
+    ) -> dict:
+        queries: list[Any] = list(filters or [])
+        queries.append(Query.limit(limit))
+        queries.append(Query.offset(offset))
+        if order_desc:
+            queries.append(Query.order_desc(order_desc))
+
+        try:
+            response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, queries)
+
+            # Newer Appwrite SDKs return a DocumentList-like object; older SDKs return dict.
+            if hasattr(response, "documents"):
+                documents = list(response.documents or [])
+                total = int(getattr(response, "total", 0) or 0)
+            else:
+                documents = response.get("documents", [])
+                total = int(response.get("total", 0) or 0)
+
+            normalized_docs = [
+                UserRepository._normalize_user(document)
+                for document in documents
+            ]
+
+            return {"documents": normalized_docs, "total": total}
+        except AppwriteException:
+            raise
+
+    @staticmethod
+    def count(filters: list[Any] | None = None) -> int:
+        try:
+            response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, filters or [])
+            if hasattr(response, "total"):
+                return int(getattr(response, "total", 0) or 0)
+            return int(response.get("total", 0) or 0)
+        except AppwriteException:
+            raise
 
     @staticmethod
     def get_by_email(email: str) -> dict | None:
@@ -26,9 +86,15 @@ class UserRepository:
                 USERS_COLLECTION_ID,
                 [Query.equal("email", [email.lower()])],
             )
-            documents = response.get("documents", [])
+
+            if hasattr(response, "documents"):
+                documents = list(response.documents or [])
+            else:
+                documents = response.get("documents", [])
+
             if not documents:
                 return None
+
             return UserRepository._normalize_user(documents[0])
         except AppwriteException:
             raise

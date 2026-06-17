@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -8,9 +8,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { LoginSchema, type LoginFormValues } from "@/lib/types/auth";
-import { useAuth } from "@/context/AuthContext";
 import { useSessionStore } from "@/stores/session";
 import { ROLE_ROUTE_PREFIX } from "@/lib/auth/constants";
+import type { LoginApiResponse } from "@/lib/types/auth";
 
 type StrengthLevel = "weak" | "fair" | "strong";
 
@@ -39,17 +39,23 @@ const STRENGTH_CONFIG: Record<
 
 interface LoginFormProps {
   resetSuccess?: boolean;
+  initialEmail?: string;
+  initialPassword?: string;
 }
 
-export default function LoginForm({ resetSuccess }: LoginFormProps) {
+export default function LoginForm({
+  resetSuccess,
+  initialEmail,
+  initialPassword,
+}: LoginFormProps) {
   "use no memo";
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { login } = useAuth();
   const setUser = useSessionStore((s) => s.setUser);
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [autoLoginStarted, setAutoLoginStarted] = useState(false);
 
   const {
     register,
@@ -58,29 +64,67 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(LoginSchema),
+    defaultValues: {
+      email: initialEmail ?? "",
+      password: initialPassword ?? "",
+    },
   });
 
   const password = watch("password", "");
   const strength = getPasswordStrength(password);
 
-  async function onSubmit(data: LoginFormValues) {
+  function getLoginDestination(role: LoginApiResponse["role"]): string {
+    return ROLE_ROUTE_PREFIX[role];
+  }
+
+  async function submitLogin(data: LoginFormValues) {
     setServerError(null);
     try {
-      const user = await login(data.email, data.password);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | LoginApiResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok || !payload || !("role" in payload) || !("user" in payload)) {
+        throw new Error(
+          (payload && "error" in payload && payload.error) ||
+            "Something went wrong.",
+        );
+      }
+
       await fetch("/api/auth/role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: user.role }),
+        body: JSON.stringify({ role: payload.role }),
       });
-      setUser(user);
+
+      setUser(payload.user);
       queryClient.clear();
-      router.replace(ROLE_ROUTE_PREFIX[user.role]);
+      router.replace(getLoginDestination(payload.role));
     } catch (err) {
       console.error("[login] failed:", err);
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
       setServerError(message);
     }
+  }
+
+  useEffect(() => {
+    if (autoLoginStarted) return;
+    if (!initialEmail || !initialPassword) return;
+
+    setAutoLoginStarted(true);
+    void submitLogin({ email: initialEmail, password: initialPassword });
+  }, [autoLoginStarted, initialEmail, initialPassword]);
+
+  async function onSubmit(data: LoginFormValues) {
+    await submitLogin(data);
   }
 
   return (

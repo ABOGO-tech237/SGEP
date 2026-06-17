@@ -76,8 +76,7 @@ export default async function AdminDashboard() {
   const dashboard = await loadAdminDashboard();
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Sidebar */}
+    <div className="flex min-h-screen bg-background text-foreground overflow-hidden">
       <aside className="w-60 flex flex-col border-r border-border bg-card shrink-0">
         <div className="px-5 py-5 border-b border-border">
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
@@ -104,22 +103,13 @@ export default async function AdminDashboard() {
 
         <div className="px-3 py-4 border-t border-border space-y-1">
           <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            <Bell className="size-4 shrink-0" />
-            Notifications
-            <span className="ml-auto bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 font-medium">
-              3
-            </span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
             <LogOut className="size-4 shrink-0" />
             Sign out
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-card shrink-0">
           <div>
             <h1 className="text-lg font-semibold">Dashboard</h1>
@@ -140,7 +130,6 @@ export default async function AdminDashboard() {
           </div>
         </header>
 
-        {/* Scrollable body */}
         <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {!dashboard ? (
             <div className="rounded-xl border border-dashed border-border bg-card/60 px-5 py-4 text-sm text-muted-foreground">
@@ -181,34 +170,26 @@ export default async function AdminDashboard() {
             })}
           </div>
 
-          {/* Lower section */}
           <div className="grid grid-cols-3 gap-4">
-            {/* Recent activity */}
             <div className="col-span-2 rounded-xl border border-border bg-card">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h2 className="text-sm font-semibold">Recent Activity</h2>
+                <div>
+                  <h2 className="text-sm font-semibold">Recents Users</h2>
+                  <p className="text-xs text-muted-foreground mt-1">  Last 5 users</p>
+                </div>
                 <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors">
                   View all <ChevronRight className="size-3" />
                 </button>
               </div>
+
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Student
-                    </th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Action
-                    </th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Class
-                    </th>
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">
-                      Time
-                    </th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Email</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Role</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">Created</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,18 +219,19 @@ export default async function AdminDashboard() {
               </table>
             </div>
 
-            {/* Quick actions */}
             <div className="rounded-xl border border-border bg-card">
               <div className="px-5 py-4 border-b border-border">
                 <h2 className="text-sm font-semibold">Quick Actions</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use the backend seeding command to insert sample Appwrite users.
+                </p>
               </div>
               <div className="p-4 space-y-2">
                 {[
-                  { label: "Enrol new student", icon: GraduationCap },
-                  { label: "Add teacher", icon: UserCheck },
-                  { label: "Create class", icon: BookOpen },
-                  { label: "Generate report", icon: FileText },
-                  { label: "Manage settings", icon: Settings },
+                  { label: "Create admin users", icon: GraduationCap },
+                  { label: "Create comptable account", icon: UserCheck },
+                  { label: "Refresh dashboard", icon: LayoutDashboard },
+                  { label: "Export report", icon: FileText },
                 ].map(({ label, icon: Icon }) => (
                   <button
                     key={label}

@@ -22,11 +22,10 @@ class AppwriteService:
         except Exception as exc:
             raise ImportError(f"Appwrite SDK not installed or misconfigured: {exc}") from exc
 
-    def create_collection(self, db_id: str, collection_id: str, name: str):
-        """Create a new collection."""
-        return self.databases.create_collection(
+    def create_database(self, db_id: str, name: str):
+        """Create a new database."""
+        return self.databases.create(
             database_id=db_id,
-            collection_id=collection_id,
             name=name,
         )
 

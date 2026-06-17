@@ -10,7 +10,7 @@ DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="", cast=Csv())
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 
-APPWRITE_ENDPOINT = config("APPWRITE_ENDPOINT", default="http://localhost/v1")
+APPWRITE_ENDPOINT = config("APPWRITE_ENDPOINT", default="https://cloud.appwrite.io/v1")
 APPWRITE_PROJECT_ID = config("APPWRITE_PROJECT_ID", default="")
 APPWRITE_API_KEY = config("APPWRITE_API_KEY", default="")
 APPWRITE_DB_ID = config("APPWRITE_DB_ID", default="sgep_db")
@@ -115,6 +115,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
+MEDICAL_ENCRYPTION_KEY = config("MEDICAL_ENCRYPTION_KEY", default="")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
