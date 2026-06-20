@@ -4,13 +4,16 @@ This backend is configured to use Appwrite Cloud instead of a local Docker Appwr
 
 ## Environment variables
 
-Set these values in your `.env` file:
+Set these values in `backend/.env` (placeholders, safe to commit) or override with
+`backend/.env.local` (gitignored, recommended for real credentials):
 
 - `APPWRITE_ENDPOINT=https://<your-region>.cloud.appwrite.io/v1`
 - `APPWRITE_PROJECT_ID=<your-project-id>`
 - `APPWRITE_API_KEY=<server-api-key>`
 - `APPWRITE_DB_ID=sgep_db`
 - `MEDICAL_ENCRYPTION_KEY=<fernet-key>`
+
+`settings.py` loads `.env` first, then `.env.local` overrides for local development.
 
 The `MEDICAL_ENCRYPTION_KEY` is used to encrypt and decrypt the `medical` payload stored on student documents.
 

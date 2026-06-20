@@ -7,6 +7,7 @@ from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import documents_of, to_dict
 
 DB_ID = settings.APPWRITE_DB_ID
 COLLECTION_ID = "attendance"
@@ -22,6 +23,7 @@ TYPE_TO_STATUS = {
 
 
 def _normalize_document(document: dict) -> dict:
+	document = to_dict(document)
 	normalized = dict(document)
 	normalized["id"] = document.get("$id", document.get("id"))
 	return normalized
@@ -48,7 +50,7 @@ class AttendanceRepository:
 
 		try:
 			response = databases.list_documents(DB_ID, COLLECTION_ID, queries)
-			return [_normalize_document(document) for document in response.get("documents", [])]
+			return [_normalize_document(document) for document in documents_of(response)]
 		except AppwriteException:
 			raise
 

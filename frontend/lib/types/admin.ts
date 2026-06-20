@@ -37,6 +37,28 @@ export interface AdminDashboardActivity {
   time: string;
 }
 
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  name: string;
+  first_name?: string;
+  last_name?: string;
+  role: string;
+  account_status: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface AdminUserDashboardResponse {
+  total_users: number;
+  active_users: number;
+  suspended_users: number;
+  superadmins: number;
+  comptables: number;
+  parents: number;
+  recent_users: AdminUserSummary[];
+}
+
 export interface AdminDashboardResponse {
   generated_at: string;
   academic_year?: { id: string; name: string } | null;
@@ -47,5 +69,13 @@ export interface AdminDashboardResponse {
     recovery_rate: number;
     overdue_count: number;
   };
-  recent_activity: AdminDashboardActivity[];
+  recent_activity: Array<{
+    id: string;
+    name: string;
+    action: string;
+    grade: string;
+    status: AdminActivityStatus;
+    time: string;
+  }>;
+  recent_users?: AdminUserSummary[];
 }

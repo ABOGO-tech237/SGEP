@@ -5,12 +5,14 @@ from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import to_dict
 
 DB_ID = settings.APPWRITE_DB_ID
 COLLECTION_ID = "report_jobs"
 
 
 def _normalize(document: dict) -> dict:
+	document = to_dict(document)
 	result = dict(document)
 	result["id"] = document.get("$id", document.get("id"))
 	return result

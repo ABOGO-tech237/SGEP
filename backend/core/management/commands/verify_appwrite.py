@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from django.core.management.base import BaseCommand
 
 from core.appwrite_test_utils import is_appwrite_configured
+from core.appwrite_utils import total_of
 from config.appwrite_client import databases
 from django.conf import settings
 
@@ -49,7 +50,7 @@ class Command(BaseCommand):
 					collection_id,
 					[],
 				)
-				total = response.get("total", 0)
+				total = total_of(response)
 				self.stdout.write(self.style.SUCCESS(f"  ✓ {collection_id:<18} {total} document(s)"))
 			except Exception as exc:
 				self.stdout.write(self.style.ERROR(f"  ✗ {collection_id:<18} {exc}"))

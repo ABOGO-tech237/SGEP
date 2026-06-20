@@ -5,6 +5,7 @@ from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import documents_of, to_dict
 
 DB_ID = settings.APPWRITE_DB_ID
 GRADES_COLLECTION_ID = "grades"
@@ -13,6 +14,7 @@ SUBJECTS_COLLECTION_ID = "subjects"
 
 
 def _normalize_document(document: dict) -> dict:
+	document = to_dict(document)
 	normalized = dict(document)
 	normalized["id"] = document.get("$id", document.get("id"))
 	return normalized
@@ -40,7 +42,7 @@ class GradeRepository:
 
 		try:
 			response = databases.list_documents(DB_ID, GRADES_COLLECTION_ID, queries)
-			grades = [_normalize_document(document) for document in response.get("documents", [])]
+			grades = [_normalize_document(document) for document in documents_of(response)]
 			if class_id and not student_ids and not student_id:
 				return grades
 			return grades
@@ -105,7 +107,7 @@ class SubjectRepository:
 					Query.limit(100),
 				],
 			)
-			return [_normalize_document(document) for document in response.get("documents", [])]
+			return [_normalize_document(document) for document in documents_of(response)]
 		except AppwriteException:
 			raise
 
@@ -120,7 +122,7 @@ class ReportCardRepository:
 			queries.append(Query.equal("sequence", [period_id]))
 		try:
 			response = databases.list_documents(DB_ID, REPORT_CARDS_COLLECTION_ID, queries)
-			return [_normalize_document(document) for document in response.get("documents", [])]
+			return [_normalize_document(document) for document in documents_of(response)]
 		except AppwriteException:
 			raise
 

@@ -7,6 +7,7 @@ from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import documents_of, to_dict, total_of
 
 DB_ID = settings.APPWRITE_DB_ID
 USERS_COLLECTION_ID = "users"
@@ -16,24 +17,12 @@ REFRESH_TOKEN_BLACKLIST_COLLECTION_ID = "refresh_token_blacklist"
 class UserRepository:
     @staticmethod
     def _normalize_user(document: dict) -> dict:
-        # Appwrite Document objects have custom fields in .data attribute
-        if hasattr(document, "data"):
-            raw_document = dict(document.data or {})
-        elif hasattr(document, "model_dump"):
-            raw_document = document.model_dump()
-        elif isinstance(document, dict):
-            raw_document = dict(document)
-        else:
-            raw_document = dict(document)
-
-        normalized = dict(raw_document)
+        document = to_dict(document)
+        normalized = dict(document)
 
         # Ensure we have an 'id' field for consistency
         if "id" not in normalized:
-            if isinstance(document, dict):
-                normalized["id"] = document.get("$id")
-            else:
-                normalized["id"] = getattr(document, "id", None)
+            normalized["id"] = document.get("$id")
         return normalized
     @staticmethod
     def list(
@@ -51,20 +40,12 @@ class UserRepository:
         try:
             response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, queries)
 
-            # Newer Appwrite SDKs return a DocumentList-like object; older SDKs return dict.
-            if hasattr(response, "documents"):
-                documents = list(response.documents or [])
-                total = int(getattr(response, "total", 0) or 0)
-            else:
-                documents = response.get("documents", [])
-                total = int(response.get("total", 0) or 0)
-
             normalized_docs = [
                 UserRepository._normalize_user(document)
-                for document in documents
+                for document in documents_of(response)
             ]
 
-            return {"documents": normalized_docs, "total": total}
+            return {"documents": normalized_docs, "total": total_of(response)}
         except AppwriteException:
             raise
 
@@ -72,9 +53,7 @@ class UserRepository:
     def count(filters: list[Any] | None = None) -> int:
         try:
             response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, filters or [])
-            if hasattr(response, "total"):
-                return int(getattr(response, "total", 0) or 0)
-            return int(response.get("total", 0) or 0)
+            return total_of(response)
         except AppwriteException:
             raise
 
@@ -87,11 +66,7 @@ class UserRepository:
                 [Query.equal("email", [email.lower()])],
             )
 
-            if hasattr(response, "documents"):
-                documents = list(response.documents or [])
-            else:
-                documents = response.get("documents", [])
-
+            documents = documents_of(response)
             if not documents:
                 return None
 
@@ -143,7 +118,7 @@ class UserRepository:
                     Query.equal("is_deleted", [False]),
                 ],
             )
-            return [UserRepository._normalize_user(document) for document in response.get("documents", [])]
+            return [UserRepository._normalize_user(document) for document in documents_of(response)]
         except AppwriteException:
             raise
 
@@ -157,7 +132,7 @@ class UserRepository:
             queries.append(Query.equal("account_status", [account_status]))
         try:
             response = databases.list_documents(DB_ID, USERS_COLLECTION_ID, queries)
-            return [UserRepository._normalize_user(document) for document in response.get("documents", [])]
+            return [UserRepository._normalize_user(document) for document in documents_of(response)]
         except AppwriteException:
             raise
 
@@ -171,7 +146,7 @@ class RefreshTokenBlacklistRepository:
                 REFRESH_TOKEN_BLACKLIST_COLLECTION_ID,
                 [Query.equal("jti", [jti])],
             )
-            return bool(response.get("documents", []))
+            return bool(documents_of(response))
         except AppwriteException:
             raise
 

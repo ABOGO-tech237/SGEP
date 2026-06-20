@@ -1,0 +1,546 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+
+\geometry{margin=2.5cm}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    pdftitle={SGEP --- Implementation Summary},
+}
+
+\title{SGEP --- Implementation Summary\\
+\large Primary School Management System}
+\author{Technical documentation generated from the SGEP repository}
+\date{June 18, 2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+%==============================================================================
+\section{Overview}
+%==============================================================================
+
+\textbf{SGEP} (Système de Gestion d'École Primaire --- Primary School Management System) is a school management application tailored to the Cameroonian context. The repository combines a Django REST backend exposing the business API under \texttt{/api/v1/}, a Next.js~16 frontend (App Router), and Appwrite Cloud as a document database (without Django SQL ORM).
+
+Active development is carried on branch \textbf{\texttt{feature/backend-02}} (present locally and on \texttt{origin}), which notably integrates Appwrite Cloud migration, attendance management, OpenAPI documentation, and the administrator dashboard.
+
+%==============================================================================
+\section{Technical Architecture}
+%==============================================================================
+
+\subsection{Stack}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Layer} & \textbf{Technology} & \textbf{Role} \\
+\midrule
+Backend API & Django 5.2 LTS & Web framework \\
+REST API & Django REST Framework 3.15+ & JSON endpoints \\
+Persistence & Appwrite Cloud (Python SDK 7.x) & Document collections \\
+Cache / broker & Redis 7 & Cache and Celery queue \\
+Async tasks & Celery 5.4 + django-celery-beat & Exports, emails, report cards \\
+API authentication & djangorestframework-simplejwt 5.x & JWT access / refresh \\
+API documentation & drf-spectacular & OpenAPI schema, Swagger, ReDoc \\
+PDF & WeasyPrint 62+ & Report cards, receipts \\
+Excel & pandas + openpyxl & Tabular exports \\
+Frontend & Next.js 16 (App Router) & User interface \\
+Frontend auth & Appwrite SDK (session) + HttpOnly cookies & User login \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Layered Pattern}
+
+All business logic follows the mandatory flow documented in \texttt{AGENT.md}:
+
+\begin{center}
+\texttt{View (DRF)} $\rightarrow$ \texttt{Service} $\rightarrow$ \texttt{Repository} $\rightarrow$ \texttt{Appwrite SDK}
+\end{center}
+
+\begin{itemize}[noitemsep]
+    \item DRF \textbf{views} validate input via serializers, apply permissions, and delegate to services.
+    \item \textbf{Services} encapsulate business rules (calculations, orchestration, Celery dispatch).
+    \item \textbf{Repositories} are the sole access point to Appwrite collections (\texttt{config/appwrite\_client.py}).
+    \item No Django ORM models are used for business data (except \texttt{accounts.User} for JWT integration).
+\end{itemize}
+
+\subsection{Installed Django Apps}
+
+Business applications registered in \texttt{INSTALLED\_APPS} are:
+
+\begin{itemize}[noitemsep]
+    \item \texttt{core} --- school, academic years, audit, Appwrite configuration
+    \item \texttt{accounts} --- users, roles, JWT authentication, user dashboard
+    \item \texttt{classes} --- classes and subjects
+    \item \texttt{students} --- students, enrollments, promotions, exports
+    \item \texttt{attendance} --- absences and tardiness
+    \item \texttt{grades} --- grades and PDF report cards
+    \item \texttt{finance} --- invoices, payments, financial dashboard
+    \item \texttt{parents} --- parent portal and guardian accounts
+    \item \texttt{notifications} --- emails and notification log (no dedicated REST URLs)
+    \item \texttt{reports} --- tracking and download of async export jobs
+\end{itemize}
+
+\subsection{DRF Roles and Permissions}
+
+Three business roles are defined in \texttt{accounts/permissions.py}:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Role} & \textbf{Constant} & \textbf{Permission Class} \\
+\midrule
+Super Administrator & \texttt{superadmin} & \texttt{IsSuperAdmin} \\
+Accountant & \texttt{comptable} & \texttt{IsComptable} (includes superadmin) \\
+Parent & \texttt{parent} & \texttt{IsActiveParent} or \texttt{IsParentAny} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\texttt{IsParentAny} allows access to invoices and receipts even when the parent account is suspended. \texttt{IsActiveParent} requires \texttt{account\_status = active} for academic data.
+
+%==============================================================================
+\section{Authentication --- Dual Flow}
+%==============================================================================
+
+\subsection{Appwrite Flow (Frontend)}
+
+On login via \texttt{POST /api/auth/login} (Next.js Route Handler):
+
+\begin{enumerate}[noitemsep]
+    \item Call \texttt{loginWithAppwrite} --- creates an Appwrite session server-side.
+    \item HttpOnly cookie \texttt{SESSION\_COOKIE} containing the Appwrite session secret.
+    \item Non-HttpOnly CSRF cookie \texttt{psms\_csrf} for mutating requests.
+\end{enumerate}
+
+The endpoints \texttt{/api/auth/me}, \texttt{/api/auth/logout}, and session resolution rely on this Appwrite session.
+
+\subsection{Django Simple JWT Flow (Business API Bridge)}
+
+In parallel, the same login calls \texttt{loginWithDjango} toward \texttt{POST /api/v1/auth/login/}:
+
+\begin{enumerate}[noitemsep]
+    \item Email/password verification against the Appwrite \texttt{users} collection (\texttt{AuthService.login}).
+    \item Issuance of an access/refresh JWT pair (Simple JWT) with claims \texttt{role}, \texttt{account\_status}, \texttt{email}, \texttt{student\_id}.
+    \item HttpOnly cookies \texttt{DJANGO\_ACCESS\_COOKIE} and \texttt{DJANGO\_REFRESH\_COOKIE} stored by the frontend.
+\end{enumerate}
+
+Next.js Route Handlers (\texttt{proxyFetch}) inject the bearer JWT server-side; the browser never calls Django directly.
+
+\subsection{Django API Request Authentication}
+
+\texttt{REST\_FRAMEWORK.DEFAULT\_AUTHENTICATION\_CLASSES} uses \texttt{AppwriteJWTAuthentication}, which extends \texttt{JWTAuthentication} and loads the user from Appwrite via \texttt{UserRepository.get\_by\_id}.
+
+Public auth endpoints (\texttt{authentication\_classes = []}): login and refresh. All other endpoints require a valid JWT unless stated otherwise.
+
+%==============================================================================
+\section{OpenAPI Documentation (Swagger)}
+%==============================================================================
+
+\begin{longtable}{@{}llp{7cm}@{}}
+\toprule
+\textbf{Path} & \textbf{Method} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{/api/schema/} & GET & Raw OpenAPI schema (drf-spectacular) \\
+\texttt{/api/docs/} & GET & Swagger UI interface \\
+\texttt{/api/redoc/} & GET & ReDoc documentation \\
+\texttt{/admin/} & --- & Django admin interface (outside API v1) \\
+\bottomrule
+\end{longtable}
+
+Documented prefix for business routes: \texttt{/api/v1}.
+
+%==============================================================================
+\section{Backend API Routes (\texttt{/api/v1/})}
+%==============================================================================
+
+The tables below list routes declared in each module's \texttt{urls.py} files. The common prefix is \texttt{/api/v1/}.
+
+\subsection{Module \texttt{accounts}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{auth/login/} & POST & Public & Login, JWT issuance \\
+\texttt{auth/refresh/} & POST & Public & Access token renewal \\
+\texttt{auth/logout/} & POST & \texttt{IsAuthenticated} & Refresh token blacklist \\
+\texttt{auth/change-password/} & POST & \texttt{IsAuthenticated} & Password change \\
+\texttt{admin/dashboard/} & GET & \texttt{IsSuperAdmin} & User statistics (accounts, roles, recent) \\
+\bottomrule
+\end{longtable}
+
+\textbf{Note:} \texttt{accounts.urls} is included first in \texttt{config/urls.py}. The \texttt{admin/dashboard/} route from \texttt{accounts} therefore takes precedence over the homonymous route in the \texttt{core} module (see Section~\ref{sec:admin-dashboard}).
+
+\subsection{Module \texttt{core}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{schools/} & GET, POST & \texttt{IsSuperAdmin} & List / create schools \\
+\texttt{schools/<pk>/} & GET, PATCH & \texttt{IsSuperAdmin} & Detail / update \\
+\texttt{academic-years/} & GET, POST & \texttt{IsSuperAdmin} & Academic years (filter \texttt{school\_id}) \\
+\texttt{academic-years/<pk>/} & GET, PATCH & \texttt{IsSuperAdmin} & Detail / update \\
+\texttt{admin/dashboard/} & GET & \texttt{IsSuperAdmin} & Enrollment dashboard (shadowed by \texttt{accounts}) \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{classes}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{classes/} & GET, POST & \texttt{IsSuperAdmin} & Classes (filters \texttt{academic\_year\_id}, \texttt{level\_id}) \\
+\texttt{classes/<pk>/} & GET, PATCH & \texttt{IsSuperAdmin} & Detail / update \\
+\texttt{subjects/} & GET, POST & \texttt{IsSuperAdmin} & Subjects (filter \texttt{class\_id}) \\
+\texttt{subjects/<pk>/} & GET, PATCH & \texttt{IsSuperAdmin} & Detail / update \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{students}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{students/} & GET, POST & \texttt{IsSuperAdmin} & Paginated list / create student \\
+\texttt{students/export/pdf/} & GET & \texttt{IsSuperAdmin} & Async PDF export (\texttt{202}, \texttt{job\_id}) \\
+\texttt{students/export/excel/} & GET & \texttt{IsSuperAdmin} & Async Excel export (\texttt{202}, \texttt{job\_id}) \\
+\texttt{students/<pk>/history/} & GET & \texttt{IsSuperAdmin} & Student history \\
+\texttt{students/<pk>/enroll/} & POST & \texttt{IsSuperAdmin} & Class enrollment \\
+\texttt{students/<pk>/promote/} & POST & \texttt{IsSuperAdmin} & Class promotion \\
+\texttt{students/<pk>/} & GET, PATCH, DELETE & \texttt{IsSuperAdmin} & Detail / update / soft delete \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{attendance}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{attendance/} & GET, POST & \texttt{IsSuperAdmin} & List / record absence \\
+\texttt{attendance/stats/} & GET & \texttt{IsSuperAdmin} & Attendance statistics \\
+\texttt{attendance/export/} & GET & \texttt{IsSuperAdmin} & Async export (\texttt{format=pdf|excel}) \\
+\texttt{attendance/<pk>/justify/} & POST & \texttt{IsSuperAdmin} & Absence justification \\
+\texttt{attendance/<pk>/} & PUT & \texttt{IsSuperAdmin} & Update a record \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{grades}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{grades/} & GET, POST & \texttt{IsSuperAdmin} & List / create grade \\
+\texttt{grades/bulk/} & POST & \texttt{IsSuperAdmin} & Bulk grade entry \\
+\texttt{grades/<pk>/} & PUT & \texttt{IsSuperAdmin} & Update grade \\
+\texttt{grades/export/results/} & GET & \texttt{IsSuperAdmin} & Async Excel results export \\
+\texttt{report-cards/generate/} & POST & \texttt{IsSuperAdmin} & Async PDF report card generation \\
+\texttt{report-cards/<pk>/status/} & GET & \texttt{IsSuperAdmin} & Report card job status \\
+\texttt{report-cards/<pk>/download/} & GET & \texttt{IsSuperAdmin} or \texttt{IsActiveParent} & Report card download \\
+\texttt{report-cards/<pk>/publish/} & POST & \texttt{IsSuperAdmin} & Publish report card (parent notification) \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{finance}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{finance/invoices/} & GET & \texttt{IsComptable} & Invoice list (filters \texttt{student\_id}, \texttt{status}) \\
+\texttt{finance/invoices/generate/} & POST & \texttt{IsComptable} & Generate invoices by class \\
+\texttt{finance/payments/} & POST & \texttt{IsComptable} & Record payment \\
+\texttt{finance/payments/<pk>/receipt/} & GET & \texttt{IsComptable} & Receipt download \\
+\texttt{finance/overdue/} & GET & \texttt{IsComptable} & Overdue invoices \\
+\texttt{finance/dashboard/} & GET & \texttt{IsComptable} & Financial dashboard \\
+\texttt{finance/export/excel/} & GET & \texttt{IsComptable} & Async Excel export \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{parents} (Parent Portal)}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{parent/me/} & GET & \texttt{IsParentAny} & Parent profile (any status) \\
+\texttt{parent/me/student/} & GET & \texttt{IsActiveParent} & Linked student record \\
+\texttt{parent/me/grades/} & GET & \texttt{IsActiveParent} & Child's grades \\
+\texttt{parent/me/attendance/} & GET & \texttt{IsActiveParent} & Child's absences \\
+\texttt{parent/me/report-cards/} & GET & \texttt{IsActiveParent} & Report card list \\
+\texttt{parent/me/report-cards/<pk>/download/} & GET & \texttt{IsActiveParent} & Report card download \\
+\texttt{parent/me/invoices/} & GET & \texttt{IsParentAny} & Invoices (suspended account allowed) \\
+\texttt{parent/me/invoices/<pk>/receipt/} & GET & \texttt{IsParentAny} & Payment receipt \\
+\texttt{parent/me/messages/} & GET, POST & \texttt{IsActiveParent} & Admin $\leftrightarrow$ parent messaging \\
+\bottomrule
+\end{longtable}
+
+\subsection{Module \texttt{reports}}
+
+\begin{longtable}{@{}lllp{5.5cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Methods} & \textbf{Permission} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{reports/<pk>/status/} & GET & \texttt{IsComptable} if role is accountant/superadmin, else \texttt{IsSuperAdmin} & Export job tracking \\
+\texttt{reports/<pk>/download/} & GET & Same & Generated file download \\
+\bottomrule
+\end{longtable}
+
+\subsection{Async Export Pattern}
+\label{sec:async-exports}
+
+Export endpoints (students, attendance, results, finance) and report card generation follow the same pattern:
+
+\begin{enumerate}[noitemsep]
+    \item Creation of a \texttt{report\_jobs} document (status \texttt{pending}).
+    \item Dispatch of a Celery task.
+    \item HTTP \texttt{202 Accepted} response with \texttt{job\_id}.
+    \item Polling via \texttt{GET /api/v1/reports/<job\_id>/status/}.
+    \item Download via \texttt{GET /api/v1/reports/<job\_id>/download/}.
+\end{enumerate}
+
+%==============================================================================
+\section{Administrator Dashboard}
+\label{sec:admin-dashboard}
+%==============================================================================
+
+\subsection{Backend Endpoint}
+
+\textbf{Effective route:} \texttt{GET /api/v1/admin/dashboard/} (\texttt{accounts} module, \texttt{IsSuperAdmin} permission).
+
+The service \texttt{accounts.services.AdminDashboardService.get\_overview} returns:
+\begin{itemize}[noitemsep]
+    \item Counters: \texttt{total\_users}, \texttt{active\_users}, \texttt{suspended\_users}
+    \item Breakdown by role: \texttt{superadmins}, \texttt{comptables}, \texttt{parents}
+    \item \texttt{recent\_users} --- five most recently created accounts
+\end{itemize}
+
+A parallel implementation exists in \texttt{core.admin\_dashboard\_service.AdminDashboardService.build} (student, class, unpaid invoice, and recent activity statistics), registered on the same URL but unreachable while \texttt{accounts.urls} remains first.
+
+\subsection{Frontend Bridge (branch \texttt{feature/backend-02})}
+
+The Route Handler \texttt{GET /api/admin/dashboard} (Next.js) calls \texttt{proxyFetch("/admin/dashboard/")}, maps the Django response to the \texttt{AdminDashboardResponse} type, and feeds the \texttt{/admin} page.
+
+%==============================================================================
+\section{Frontend Routes}
+%==============================================================================
+
+\subsection{Route Handlers (\texttt{frontend/app/api/})}
+
+\begin{longtable}{@{}llp{6.5cm}@{}}
+\toprule
+\textbf{Path} & \textbf{Methods} & \textbf{Role} \\
+\midrule
+\endhead
+\texttt{/api/health} & GET & Availability probe (\texttt{\{status: "ok"\}}) \\
+\texttt{/api/auth/login} & POST & Appwrite + Django JWT login, sets cookies \\
+\texttt{/api/auth/logout} & POST & Logout (CSRF required), invalidates sessions \\
+\texttt{/api/auth/me} & GET & Current user from Appwrite session \\
+\texttt{/api/auth/role} & POST, DELETE & Role cookie (dev/transition) \\
+\texttt{/api/admin/dashboard} & GET & Superadmin dashboard proxy \\
+\bottomrule
+\end{longtable}
+
+\subsection{Application Pages (\texttt{frontend/app/})}
+
+\begin{longtable}{@{}lp{8cm}@{}}
+\toprule
+\textbf{Path} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{/} & Redirect to \texttt{/login} \\
+\texttt{/login} & Login form (\texttt{(auth)/login}) \\
+\texttt{/forgot-password} & Forgot password (Appwrite) \\
+\texttt{/reset-password} & Password reset \\
+\texttt{/admin} & Administrator dashboard (consumes \texttt{/api/admin/dashboard}) \\
+\texttt{/admin/*} & Admin layout (sidebar navigation) \\
+\texttt{/parent/*} & Parent portal layout (scaffolded) \\
+\texttt{/accountant/*} & Accountant portal layout (scaffolded) \\
+\bottomrule
+\end{longtable}
+
+\textbf{Frontend security:} Django JWTs and the Appwrite session are stored in HttpOnly cookies. The browser does not access the Django API directly; \texttt{proxyFetch} injects the bearer token server-side.
+
+%==============================================================================
+\section{Celery Tasks}
+%==============================================================================
+
+\subsection{Tasks by Module}
+
+\begin{longtable}{@{}lp{9cm}@{}}
+\toprule
+\textbf{Task} & \textbf{Role} \\
+\midrule
+\endhead
+\texttt{students.tasks.generate\_students\_export\_task} & Student PDF/Excel export \\
+\texttt{attendance.tasks.generate\_attendance\_export\_task} & Attendance PDF/Excel export \\
+\texttt{grades.tasks.generate\_class\_report\_cards\_task} & PDF report card generation by class \\
+\texttt{reports.tasks.generate\_students\_excel\_task} & Student Excel export (reports module) \\
+\texttt{reports.tasks.generate\_attendance\_excel\_task} & Attendance Excel export \\
+\texttt{reports.tasks.generate\_results\_excel\_task} & Results Excel export \\
+\texttt{reports.tasks.generate\_finance\_export\_task} & Finance Excel export \\
+\texttt{finance.tasks.generate\_receipt\_task} & PDF/HTML receipt generation after payment \\
+\texttt{finance.tasks.send\_overdue\_reminders\_task} & Overdue invoice reminders (email) \\
+\texttt{parents.tasks.suspend\_inactive\_parents\_task} & Suspend parents not re-enrolled \\
+\texttt{notifications.tasks.notify\_parent\_absence\_task} & Email on recorded absence \\
+\texttt{notifications.tasks.notify\_bulletin\_published\_task} & Email when report card is available \\
+\texttt{notifications.tasks.notify\_payment\_overdue\_task} & Overdue invoice email \\
+\texttt{notifications.tasks.send\_parent\_credentials\_task} & Send parent credentials \\
+\texttt{notifications.tasks.notify\_account\_suspended\_task} & Account suspended email \\
+\texttt{notifications.tasks.notify\_account\_reactivated\_task} & Account reactivated email \\
+\bottomrule
+\end{longtable}
+
+\subsection{Celery Beat Schedule}
+
+Defined in \texttt{config/settings.py}:
+
+\begin{itemize}[noitemsep]
+    \item \texttt{suspend-inactive-parents-annual} --- September 1 at midnight (\texttt{parents.tasks.suspend\_inactive\_parents\_task})
+    \item \texttt{send-overdue-reminders-daily} --- every day at 08:00 (\texttt{finance.tasks.send\_overdue\_reminders\_task})
+\end{itemize}
+
+Broker and results backend: Redis (\texttt{CELERY\_BROKER\_URL}, \texttt{CELERY\_RESULT\_BACKEND}).
+
+%==============================================================================
+\section{Appwrite Collections}
+%==============================================================================
+
+The management command \texttt{python manage.py setup\_appwrite} initializes database \texttt{APPWRITE\_DB\_ID} (default \texttt{sgep\_db}) with the following collections:
+
+\begin{longtable}{@{}lp{8.5cm}@{}}
+\toprule
+\textbf{Collection ID} & \textbf{Domain} \\
+\midrule
+\endhead
+\texttt{schools} & Schools \\
+\texttt{academic\_years} & Academic years \\
+\texttt{levels} & Cameroonian levels (SIL, CP, CE1, CM2, etc.) \\
+\texttt{classes} & Classes by level and year \\
+\texttt{students} & Student records \\
+\texttt{student\_histories} & Student movement history \\
+\texttt{parents} & Guardian data \\
+\texttt{parent\_student} & Parent $\leftrightarrow$ student link \\
+\texttt{users} & Application accounts (superadmin, accountant, parent) \\
+\texttt{subjects} & Subjects and coefficients \\
+\texttt{sequences} & Evaluation periods / sequences \\
+\texttt{grades} & Grades \\
+\texttt{attendance} & Absence records \\
+\texttt{fee\_types} & School fee types \\
+\texttt{invoices} & Invoices \\
+\texttt{payments} & Payments \\
+\texttt{report\_cards} & Generated report cards \\
+\texttt{messages} & Admin/parent messaging \\
+\texttt{notifications} & Sent notification log \\
+\texttt{report\_jobs} & Async export jobs \\
+\texttt{audit\_logs} & Audit log \\
+\bottomrule
+\end{longtable}
+
+\texttt{AGENT.md} documents conceptual aliases (\texttt{guardians}, \texttt{enrollments}, \texttt{attendance\_records}); the effective identifiers created by \texttt{setup\_appwrite} are those in the table above.
+
+%==============================================================================
+\section{Tests}
+%==============================================================================
+
+\subsection{Covered Modules}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lp{8cm}}
+\toprule
+\textbf{File / Module} & \textbf{Primary Coverage} \\
+\midrule
+\texttt{accounts/tests.py} & Login, refresh, logout, change-password JWT \\
+\texttt{accounts/tests\_appwrite.py} & Appwrite user CRUD by role \\
+\texttt{core/tests.py} & Audit, schools, repositories \\
+\texttt{core/tests\_admin\_dashboard.py} & \texttt{core} dashboard service and endpoint \\
+\texttt{classes/tests.py} & Classes and subjects \\
+\texttt{students/tests.py} & Student CRUD, medical encryption, API \\
+\texttt{attendance/tests.py} & Absences, stats, async export \\
+\texttt{grades/tests.py} & Grades, bulk entry, report cards \\
+\texttt{finance/tests.py} & Invoices, payments, dashboard \\
+\texttt{parents/tests.py} & Parent portal, suspension, messages \\
+\texttt{notifications/tests.py} & Email tasks (\texttt{dry\_run} mode) \\
+\texttt{reports/tests.py} & Job status and download \\
+\texttt{test\_auth\_login.py} & Root login test \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Appwrite Integration Tests}
+
+\texttt{core/tests\_appwrite\_integration.py} contains live tests against Appwrite Cloud, decorated with \texttt{@skip\_unless\_appwrite()}. They are skipped when environment variables contain placeholders.
+
+Covered scenarios:
+\begin{itemize}[noitemsep]
+    \item Listing the \texttt{students} collection
+    \item Full CRUD cycle on a test student
+    \item Building the \texttt{core} dashboard under real conditions
+\end{itemize}
+
+%==============================================================================
+\section{Branch \texttt{feature/backend-02}}
+%==============================================================================
+
+Branch \texttt{feature/backend-02} is the active SGEP backend working branch. Recent commits include:
+
+\begin{itemize}[noitemsep]
+    \item \texttt{develop} merge resolution and restoration of backend-02 work
+    \item Attendance management features and API documentation
+    \item Appwrite Cloud migration and student management enhancements
+\end{itemize}
+
+Notable deliverables on this branch include the \texttt{GET /api/v1/admin/dashboard/} endpoint (user statistics), its frontend proxy \texttt{GET /api/admin/dashboard}, the \texttt{/admin} page, and the full set of routes documented in this summary.
+
+%==============================================================================
+\section{Appendix --- Section Summary}
+%==============================================================================
+
+\begin{enumerate}
+    \item Overview
+    \item Technical architecture (stack, pattern, modules, roles)
+    \item Authentication --- dual flow
+    \item OpenAPI documentation (Swagger)
+    \item Backend API routes (\texttt{/api/v1/})
+    \item Administrator dashboard
+    \item Frontend routes
+    \item Celery tasks
+    \item Appwrite collections
+    \item Tests
+    \item Branch \texttt{feature/backend-02}
+\end{enumerate}
+
+\end{document}

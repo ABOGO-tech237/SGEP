@@ -7,6 +7,7 @@ from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import documents_of, to_dict, total_of
 
 DB_ID = settings.APPWRITE_DB_ID
 COLLECTION_ID = "students"
@@ -16,6 +17,7 @@ from reports.repository import ReportJobRepository  # noqa: E402
 
 
 def _normalize_document(document: dict) -> dict:
+    document = to_dict(document)
     normalized = dict(document)
     normalized["id"] = document.get("$id", document.get("id"))
     return normalized
@@ -47,8 +49,8 @@ class StudentRepository:
 
         try:
             response = databases.list_documents(DB_ID, COLLECTION_ID, queries)
-            response["documents"] = [_normalize_document(document) for document in response.get("documents", [])]
-            return response
+            documents = [_normalize_document(document) for document in documents_of(response)]
+            return {"documents": documents, "total": total_of(response, len(documents))}
         except AppwriteException:
             raise
 
@@ -103,7 +105,7 @@ class StudentRepository:
                 COLLECTION_ID,
                 [Query.equal("matricule", [matricule])],
             )
-            documents = response.get("documents", [])
+            documents = documents_of(response)
             if not documents:
                 return None
             return _normalize_document(documents[0])

@@ -121,6 +121,8 @@ export default function LoginForm({
 
     setAutoLoginStarted(true);
     void submitLogin({ email: initialEmail, password: initialPassword });
+    // submitLogin intentionally omitted: one-shot auto-login when credentials are prefilled
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLoginStarted, initialEmail, initialPassword]);
 
   async function onSubmit(data: LoginFormValues) {

@@ -7,11 +7,13 @@ from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import documents_of, to_dict
 
 DB_ID = settings.APPWRITE_DB_ID
 
 
 def _normalize(document: dict) -> dict:
+	document = to_dict(document)
 	result = dict(document)
 	result["id"] = document.get("$id", document.get("id"))
 	return result
@@ -32,7 +34,7 @@ class SchoolRepository:
 				SchoolRepository.COLLECTION_ID,
 				[Query.equal("is_deleted", [False]), Query.order_desc("created_at")],
 			)
-			return [_normalize(doc) for doc in response.get("documents", [])]
+			return [_normalize(doc) for doc in documents_of(response)]
 		except AppwriteException:
 			raise
 
@@ -70,7 +72,7 @@ class AcademicYearRepository:
 			queries.append(Query.equal("school_id", [school_id]))
 		try:
 			response = databases.list_documents(DB_ID, AcademicYearRepository.COLLECTION_ID, queries)
-			return [_normalize(doc) for doc in response.get("documents", [])]
+			return [_normalize(doc) for doc in documents_of(response)]
 		except AppwriteException:
 			raise
 
@@ -105,7 +107,7 @@ class AcademicYearRepository:
 				AcademicYearRepository.COLLECTION_ID,
 				[Query.equal("is_active", [True]), Query.equal("is_deleted", [False]), Query.limit(1)],
 			)
-			docs = response.get("documents", [])
+			docs = documents_of(response)
 			return _normalize(docs[0]) if docs else None
 		except AppwriteException:
 			raise
