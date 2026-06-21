@@ -159,7 +159,12 @@ class StudentService:
             "search_index": StudentService._build_search_index({**student, "class_id": class_id, "academic_year_id": academic_year_id}),
             "updated_at": StudentService._now(),
         }
-        return StudentRepository.update(student_id, payload)
+        updated = StudentRepository.update(student_id, payload)
+        ParentAccountService.reactivate(student_id)
+        from finance.services import InvoiceService
+
+        InvoiceService.ensure_inscription_invoice(student_id, academic_year_id)
+        return updated
 
     @staticmethod
     def promote(student_id: str, target_class_id: str) -> dict:

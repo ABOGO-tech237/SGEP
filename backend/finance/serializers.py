@@ -12,12 +12,18 @@ class InvoiceSerializer(serializers.Serializer):
 	amount = serializers.FloatField()
 	status = serializers.CharField()
 	due_date = serializers.CharField()
+	planned_payment_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class InvoiceGenerateSerializer(serializers.Serializer):
 	class_id = serializers.CharField(required=False, allow_blank=True)
 	fee_type_id = serializers.CharField()
 	academic_year_id = serializers.CharField()
+	due_date = serializers.CharField(required=False, allow_blank=True)
+
+
+class InvoicePlannedPaymentSerializer(serializers.Serializer):
+	planned_payment_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class PaymentCreateSerializer(serializers.Serializer):

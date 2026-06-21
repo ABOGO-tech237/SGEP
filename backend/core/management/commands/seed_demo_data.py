@@ -124,6 +124,9 @@ CLASS_SUBJECTS = [
 
 FEE_TYPES = [
     {"code": "INSC", "name": "Frais d'inscription", "amount": 15000.0},
+    {"code": "TR1", "name": "1ère tranche", "amount": 25000.0},
+    {"code": "TR2", "name": "2ème tranche", "amount": 25000.0},
+    {"code": "TR3", "name": "3ème tranche", "amount": 25000.0},
     {"code": "SCOL", "name": "Frais de scolarité", "amount": 75000.0},
     {"code": "CANT", "name": "Frais de cantine", "amount": 30000.0},
     {"code": "UNIF", "name": "Uniforme scolaire", "amount": 12000.0},

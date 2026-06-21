@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import ACCOUNT_STATUS_ACTIVE, ACCOUNT_STATUS_SUSPENDED, ROLE_PARENT, User
 from parents.services import ParentAccountService
+from students.services import StudentService
 
 
 class ParentAccountServiceTests(SimpleTestCase):
@@ -33,6 +34,30 @@ class ParentAccountServiceTests(SimpleTestCase):
 			ParentAccountService.suspend("stu-1")
 
 		delay_mock.assert_called_once_with("parent-1")
+
+	def test_reactivate_updates_account_status_and_notifies(self):
+		parents = [{"id": "parent-1", "email": "p1@example.com", "account_status": ACCOUNT_STATUS_SUSPENDED}]
+
+		with patch("parents.services.UserRepository.list_by_student_id", return_value=parents), patch(
+			"parents.services.UserRepository.update",
+			return_value={"id": "parent-1", "account_status": ACCOUNT_STATUS_ACTIVE},
+		), patch("parents.services.notify_account_reactivated_task.delay") as delay_mock:
+			ParentAccountService.reactivate("stu-1")
+
+		delay_mock.assert_called_once_with("parent-1")
+
+	def test_enroll_reactivates_parent_accounts(self):
+		student = {"id": "stu-1", "history": "[]", "first_name": "Awa", "last_name": "Nana", "matricule": "MAT-1"}
+
+		with patch("students.services.StudentRepository.get", return_value=student), patch(
+			"students.services.StudentRepository.update",
+			return_value={"id": "stu-1", "class_id": "class-a", "academic_year_id": "ay-1"},
+		), patch("students.services.ParentAccountService.reactivate") as reactivate_mock, patch(
+			"finance.services.InvoiceService.ensure_inscription_invoice"
+		):
+			StudentService.enroll("stu-1", "class-a", "ay-1")
+
+		reactivate_mock.assert_called_once_with("stu-1")
 
 
 class ParentPortalApiTests(SimpleTestCase):
@@ -89,10 +114,38 @@ class ParentPortalApiTests(SimpleTestCase):
 			student_id="stu-1",
 		)
 		self.client.force_authenticate(user=suspended_user)
-		with patch("parents.views.InvoiceService.list", return_value=[{"id": "inv-1", "amount": 500}]):
+		with patch(
+			"parents.views.InvoiceService.list",
+			return_value=[
+				{
+					"id": "inv-1",
+					"number": "INV-001",
+					"student_id": "stu-1",
+					"academic_year_id": "ay-1",
+					"amount": 500,
+					"status": "pending",
+					"due_date": "2026-10-31T00:00:00+00:00",
+				}
+			],
+		):
 			response = self.client.get("/api/v1/parent/me/invoices/")
 
 		self.assertEqual(response.status_code, 200)
+
+	def test_parent_set_planned_payment_date(self):
+		self.client.force_authenticate(user=self.user)
+		with patch(
+			"parents.views.InvoiceService.set_planned_payment_date",
+			return_value={"id": "inv-1", "amount": 500, "planned_payment_date": "2026-10-15T00:00:00+00:00", "number": "INV-1", "student_id": "stu-1", "academic_year_id": "ay-1", "status": "pending", "due_date": "2026-10-31T00:00:00+00:00"},
+		) as set_mock:
+			response = self.client.patch(
+				"/api/v1/parent/me/invoices/inv-1/planned-payment-date/",
+				{"planned_payment_date": "2026-10-15T00:00:00+00:00"},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 200)
+		set_mock.assert_called_once_with("inv-1", "stu-1", "2026-10-15T00:00:00+00:00")
 
 	def test_parent_attendance_returns_records(self):
 		self.client.force_authenticate(user=self.user)

@@ -29,6 +29,14 @@ class AppwriteService:
             name=name,
         )
 
+    def create_collection(self, db_id: str, collection_id: str, name: str):
+        """Create a new collection (table) in a database."""
+        return self.databases.create_collection(
+            database_id=db_id,
+            collection_id=collection_id,
+            name=name,
+        )
+
     def create_attribute(self, db_id: str, collection_id: str, key: str, type: str, **kwargs):
         """Create an attribute in a collection."""
         type_methods = {

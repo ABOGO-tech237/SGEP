@@ -72,6 +72,25 @@ class StudentServiceTests(SimpleTestCase):
 		self.assertEqual(response["page"], 2)
 		self.assertEqual(response["page_size"], 5)
 
+	def test_enroll_creates_inscription_invoice(self):
+		student = {
+			"id": "stu-1",
+			"history": "[]",
+			"first_name": "Awa",
+			"last_name": "Nana",
+			"matricule": "MAT-1",
+		}
+
+		with patch("students.services.StudentRepository.get", return_value=student), patch(
+			"students.services.StudentRepository.update",
+			return_value={"id": "stu-1", "class_id": "class-a", "academic_year_id": "ay-1"},
+		), patch("students.services.ParentAccountService.reactivate"), patch(
+			"finance.services.InvoiceService.ensure_inscription_invoice"
+		) as invoice_mock:
+			StudentService.enroll("stu-1", "class-a", "ay-1")
+
+		invoice_mock.assert_called_once_with("stu-1", "ay-1")
+
 
 @override_settings(MEDICAL_ENCRYPTION_KEY=Fernet.generate_key().decode())
 class StudentSerializerTests(SimpleTestCase):

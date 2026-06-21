@@ -3,9 +3,49 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from core.exceptions import ConflictError, NotFoundError
+from rest_framework.exceptions import ValidationError
 from students.repository import StudentRepository
 
 from .repository import FeeTypeRepository, InvoiceRepository, PaymentRepository
+
+OVERDUE_REMINDER_DAYS = {7, 15, 30}
+
+
+def parse_iso_datetime(value: str) -> datetime | None:
+	if not value:
+		return None
+	try:
+		parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+	except ValueError:
+		return None
+	if parsed.tzinfo is None:
+		parsed = parsed.replace(tzinfo=timezone.utc)
+	return parsed
+
+
+def reminder_start_date(invoice: dict) -> datetime | None:
+	due_date = parse_iso_datetime(invoice.get("due_date", ""))
+	planned_date = parse_iso_datetime(invoice.get("planned_payment_date", ""))
+	if planned_date:
+		return planned_date
+	return due_date
+
+
+def reminder_days_since_start(invoice: dict, now: datetime | None = None) -> int:
+	start = reminder_start_date(invoice)
+	if not start:
+		return 0
+	current = now or datetime.now(timezone.utc)
+	if current < start:
+		return 0
+	return max(0, (current - start).days)
+
+
+def should_send_overdue_reminder(invoice: dict, now: datetime | None = None) -> bool:
+	if invoice.get("status") != "pending":
+		return False
+	days = reminder_days_since_start(invoice, now=now)
+	return days in OVERDUE_REMINDER_DAYS
 
 
 class InvoiceService:
@@ -25,11 +65,17 @@ class InvoiceService:
 		return invoice
 
 	@staticmethod
-	def _generate_for_students(students: list[dict], fee_type_id: str, academic_year_id: str) -> int:
+	def _generate_for_students(
+		students: list[dict],
+		fee_type_id: str,
+		academic_year_id: str,
+		due_date: str | None = None,
+	) -> int:
 		fee_type = FeeTypeRepository.get(fee_type_id)
 		if not fee_type:
 			raise NotFoundError(f"Type de frais {fee_type_id} introuvable.")
 
+		invoice_due_date = due_date or InvoiceService._now()
 		created_count = 0
 		for student in students:
 			if InvoiceRepository.find_existing(student["id"], fee_type_id, academic_year_id):
@@ -42,7 +88,8 @@ class InvoiceService:
 					"fee_type_id": fee_type_id,
 					"amount": float(fee_type.get("amount", 0)),
 					"status": "pending",
-					"due_date": InvoiceService._now(),
+					"due_date": invoice_due_date,
+					"planned_payment_date": "",
 					"is_deleted": False,
 					"created_at": InvoiceService._now(),
 					"updated_at": InvoiceService._now(),
@@ -51,15 +98,79 @@ class InvoiceService:
 			created_count += 1
 		return created_count
 
-	@staticmethod
-	def generate_for_class(class_id: str, fee_type_id: str, academic_year_id: str) -> int:
-		response = StudentRepository.list(class_id=class_id, is_active=True, page_size=500)
-		return InvoiceService._generate_for_students(response.get("documents", []), fee_type_id, academic_year_id)
+	INSC_FEE_CODE = "INSC"
 
 	@staticmethod
-	def generate_bulk(academic_year_id: str, fee_type_id: str) -> int:
+	def generate_for_student(
+		student_id: str,
+		fee_type_id: str,
+		academic_year_id: str,
+		due_date: str | None = None,
+	) -> int:
+		student = StudentRepository.get(student_id)
+		if not student:
+			raise NotFoundError(f"Student {student_id} introuvable.")
+		return InvoiceService._generate_for_students(
+			[student],
+			fee_type_id,
+			academic_year_id,
+			due_date=due_date,
+		)
+
+	@staticmethod
+	def ensure_inscription_invoice(student_id: str, academic_year_id: str) -> int:
+		fee_type = FeeTypeRepository.find_by_code(InvoiceService.INSC_FEE_CODE)
+		if not fee_type:
+			return 0
+		return InvoiceService.generate_for_student(student_id, fee_type["id"], academic_year_id)
+
+	@staticmethod
+	def generate_for_class(
+		class_id: str,
+		fee_type_id: str,
+		academic_year_id: str,
+		due_date: str | None = None,
+	) -> int:
+		response = StudentRepository.list(class_id=class_id, is_active=True, page_size=500)
+		return InvoiceService._generate_for_students(
+			response.get("documents", []),
+			fee_type_id,
+			academic_year_id,
+			due_date=due_date,
+		)
+
+	@staticmethod
+	def generate_bulk(academic_year_id: str, fee_type_id: str, due_date: str | None = None) -> int:
 		response = StudentRepository.list(academic_year_id=academic_year_id, is_active=True, page_size=500)
-		return InvoiceService._generate_for_students(response.get("documents", []), fee_type_id, academic_year_id)
+		return InvoiceService._generate_for_students(
+			response.get("documents", []),
+			fee_type_id,
+			academic_year_id,
+			due_date=due_date,
+		)
+
+	@staticmethod
+	def set_planned_payment_date(invoice_id: str, student_id: str, planned_payment_date: str | None) -> dict:
+		invoice = InvoiceService.get(invoice_id)
+		if invoice.get("student_id") != student_id:
+			raise NotFoundError(f"Facture {invoice_id} introuvable.")
+		if invoice.get("status") == "paid":
+			raise ConflictError("La facture est déjà soldée.")
+
+		normalized_date = ""
+		if planned_payment_date:
+			parsed = parse_iso_datetime(planned_payment_date)
+			if not parsed:
+				raise ValidationError("Date de paiement prévue invalide.")
+			normalized_date = parsed.isoformat()
+
+		return InvoiceRepository.update(
+			invoice_id,
+			{
+				"planned_payment_date": normalized_date,
+				"updated_at": InvoiceService._now(),
+			},
+		)
 
 	@staticmethod
 	def overdue() -> list[dict]:

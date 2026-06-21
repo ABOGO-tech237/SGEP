@@ -2,3 +2,7 @@ node_modules/
 .next/
 CODEBASE_SUMMARY.md
 **.pyc
+.quick_start.md
+.vscode/
+.qodo/
+.venv/

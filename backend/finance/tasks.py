@@ -9,23 +9,10 @@ from django.conf import settings
 from django.template.loader import render_to_string
 
 from finance.repository import InvoiceRepository, PaymentRepository
+from finance.services import reminder_days_since_start, should_send_overdue_reminder
 from notifications.tasks import notify_payment_overdue_task
 
 RECEIPTS_DIR = Path("/srv/sgep/media/receipts")
-OVERDUE_REMINDER_DAYS = {7, 15, 30}
-
-
-def _overdue_days(due_date: str) -> int:
-	if not due_date:
-		return 0
-	try:
-		parsed = datetime.fromisoformat(due_date.replace("Z", "+00:00"))
-		if parsed.tzinfo is None:
-			parsed = parsed.replace(tzinfo=timezone.utc)
-		delta = datetime.now(timezone.utc) - parsed
-		return max(0, delta.days)
-	except ValueError:
-		return 0
 
 
 @shared_task(bind=True, max_retries=3)
@@ -63,10 +50,11 @@ def send_overdue_reminders_task(self) -> dict:
 	sent = 0
 	dry_run = not settings.EMAIL_HOST
 
+	now = datetime.now(timezone.utc)
 	for invoice in overdue_invoices:
-		days = _overdue_days(invoice.get("due_date", ""))
-		if days not in OVERDUE_REMINDER_DAYS:
+		if not should_send_overdue_reminder(invoice, now=now):
 			continue
+		days = reminder_days_since_start(invoice, now=now)
 		notify_payment_overdue_task.delay(invoice["id"], days, dry_run=dry_run)
 		sent += 1
 

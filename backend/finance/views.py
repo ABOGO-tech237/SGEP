@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from accounts.permissions import IsComptable
 from students.repository import ReportJobRepository
 
-from .serializers import InvoiceGenerateSerializer, InvoiceSerializer, PaymentCreateSerializer, PaymentSerializer
+from .serializers import InvoiceGenerateSerializer, InvoicePlannedPaymentSerializer, InvoiceSerializer, PaymentCreateSerializer, PaymentSerializer
 from .services import InvoiceService, PaymentService
 from .tasks import send_overdue_reminders_task
 
@@ -35,10 +35,16 @@ class FinanceInvoiceGenerateView(APIView):
 		serializer = InvoiceGenerateSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		data = serializer.validated_data
+		due_date = data.get("due_date") or None
 		if data.get("class_id"):
-			count = InvoiceService.generate_for_class(data["class_id"], data["fee_type_id"], data["academic_year_id"])
+			count = InvoiceService.generate_for_class(
+				data["class_id"],
+				data["fee_type_id"],
+				data["academic_year_id"],
+				due_date=due_date,
+			)
 		else:
-			count = InvoiceService.generate_bulk(data["academic_year_id"], data["fee_type_id"])
+			count = InvoiceService.generate_bulk(data["academic_year_id"], data["fee_type_id"], due_date=due_date)
 		return Response({"created": count}, status=status.HTTP_201_CREATED)
 
 

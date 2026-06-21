@@ -482,6 +482,7 @@ class Command(BaseCommand):
                 {"key": "amount", "type": "double", "required": True},
                 {"key": "status", "type": "string", "size": 20, "required": True},
                 {"key": "due_date", "type": "datetime", "required": True},
+                {"key": "planned_payment_date", "type": "datetime", "required": False},
                 {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
                 {"key": "created_at", "type": "datetime", "required": False},
                 {"key": "updated_at", "type": "datetime", "required": False},

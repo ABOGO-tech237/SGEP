@@ -32,6 +32,23 @@ class FeeTypeRepository:
 			raise
 
 	@staticmethod
+	def find_by_code(code: str) -> dict | None:
+		try:
+			response = databases.list_documents(
+				DB_ID,
+				FeeTypeRepository.COLLECTION_ID,
+				[
+					Query.equal("code", [code]),
+					Query.equal("is_deleted", [False]),
+					Query.equal("is_active", [True]),
+				],
+			)
+			docs = documents_of(response)
+			return _normalize(docs[0]) if docs else None
+		except AppwriteException:
+			raise
+
+	@staticmethod
 	def list() -> list[dict]:
 		try:
 			response = databases.list_documents(

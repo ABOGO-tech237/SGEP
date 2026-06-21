@@ -9,6 +9,7 @@ from accounts.permissions import IsActiveParent, IsParentAny
 from accounts.repository import UserRepository
 from attendance.services import AttendanceService
 from core.exceptions import AccountSuspendedError, NotFoundError
+from finance.serializers import InvoicePlannedPaymentSerializer, InvoiceSerializer
 from finance.services import InvoiceService, PaymentService
 from grades.services import GradeService, ReportCardService
 from parents.message_services import MessageService
@@ -113,7 +114,22 @@ class ParentInvoicesView(APIView):
 	def get(self, request):
 		student_id = _get_linked_student_id(request.user)
 		invoices = InvoiceService.list(student_id=student_id)
-		return Response(invoices)
+		return Response(InvoiceSerializer(invoices, many=True).data)
+
+
+class ParentInvoicePlannedPaymentView(APIView):
+	permission_classes = [IsParentAny]
+
+	def patch(self, request, pk: str):
+		student_id = _get_linked_student_id(request.user)
+		serializer = InvoicePlannedPaymentSerializer(data=request.data, partial=True)
+		serializer.is_valid(raise_exception=True)
+		invoice = InvoiceService.set_planned_payment_date(
+			pk,
+			student_id,
+			serializer.validated_data.get("planned_payment_date"),
+		)
+		return Response(InvoiceSerializer(invoice).data)
 
 
 class ParentInvoiceReceiptView(APIView):

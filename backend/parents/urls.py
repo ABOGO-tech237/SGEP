@@ -4,6 +4,7 @@ from .views import (
 	ParentAttendanceView,
 	ParentGradesView,
 	ParentInvoiceReceiptView,
+	ParentInvoicePlannedPaymentView,
 	ParentInvoicesView,
 	ParentMeView,
 	ParentMessagesView,
@@ -20,6 +21,11 @@ urlpatterns = [
 	path("parent/me/report-cards/", ParentReportCardsView.as_view(), name="parent-report-cards"),
 	path("parent/me/report-cards/<str:pk>/download/", ParentReportCardDownloadView.as_view(), name="parent-report-card-download"),
 	path("parent/me/invoices/", ParentInvoicesView.as_view(), name="parent-invoices"),
+	path(
+		"parent/me/invoices/<str:pk>/planned-payment-date/",
+		ParentInvoicePlannedPaymentView.as_view(),
+		name="parent-invoice-planned-payment",
+	),
 	path("parent/me/invoices/<str:pk>/receipt/", ParentInvoiceReceiptView.as_view(), name="parent-invoice-receipt"),
 	path("parent/me/messages/", ParentMessagesView.as_view(), name="parent-messages"),
 ]
