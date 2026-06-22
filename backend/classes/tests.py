@@ -46,3 +46,39 @@ class ClassApiTests(SimpleTestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(len(response.data), 1)
+
+	def test_create_class(self):
+		payload = {"name": "CM2 B", "level_id": "l1", "academic_year_id": "y1"}
+		with patch("classes.views.ClassService.create", return_value={"id": "cls-2", **payload}):
+			response = self.client.post("/api/v1/classes/", payload, format="json")
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["name"], "CM2 B")
+
+	def test_get_class_detail(self):
+		with patch(
+			"classes.views.ClassService.get",
+			return_value={"id": "cls-1", "name": "CM2 A", "level_id": "l1", "academic_year_id": "y1"},
+		):
+			response = self.client.get("/api/v1/classes/cls-1/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["id"], "cls-1")
+
+	def test_patch_class(self):
+		with patch(
+			"classes.views.ClassService.update",
+			return_value={"id": "cls-1", "name": "CM2 A+", "level_id": "l1", "academic_year_id": "y1"},
+		) as update_mock:
+			response = self.client.patch("/api/v1/classes/cls-1/", {"name": "CM2 A+"}, format="json")
+
+		self.assertEqual(response.status_code, 200)
+		update_mock.assert_called_once()
+
+	def test_create_subject(self):
+		payload = {"name": "Français", "code": "FR", "coefficient": 2, "class_id": "cls-1"}
+		with patch("classes.views.SubjectService.create", return_value={"id": "sub-1", **payload}):
+			response = self.client.post("/api/v1/subjects/", payload, format="json")
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["code"], "FR")

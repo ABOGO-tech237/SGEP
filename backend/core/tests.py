@@ -45,6 +45,41 @@ class AcademicYearServiceTests(SimpleTestCase):
 
 		list_mock.assert_called_once_with(school_id="sch-1")
 
+	def test_create_defaults_is_active_false(self):
+		with patch(
+			"core.school_services.AcademicYearRepository.create",
+			return_value={"id": "ay-1", "name": "2026-2027", "is_active": False},
+		) as create_mock:
+			AcademicYearService.create(
+				{"name": "2026-2027", "start_date": "2026-09-01", "end_date": "2027-06-30", "school_id": "sch-1"}
+			)
+
+		payload = create_mock.call_args[0][0]
+		self.assertFalse(payload["is_active"])
+
+	def test_update_can_activate_year(self):
+		with patch(
+			"core.school_services.AcademicYearRepository.get",
+			return_value={"id": "ay-1", "name": "2026-2027", "is_active": False},
+		), patch(
+			"core.school_services.AcademicYearRepository.update",
+			return_value={"id": "ay-1", "is_active": True},
+		) as update_mock:
+			year = AcademicYearService.update("ay-1", {"is_active": True, "start_date": "2026-09-01"})
+
+		self.assertTrue(year["is_active"])
+		update_mock.assert_called_once()
+
+	def test_get_active_delegates_to_repository(self):
+		with patch(
+			"core.school_services.AcademicYearRepository.get_active",
+			return_value={"id": "ay-active", "is_active": True},
+		) as get_mock:
+			active = AcademicYearService.get_active()
+
+		get_mock.assert_called_once()
+		self.assertEqual(active["id"], "ay-active")
+
 
 class SchoolApiTests(SimpleTestCase):
 	def setUp(self):
@@ -58,3 +93,48 @@ class SchoolApiTests(SimpleTestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data[0]["name"], "École A")
+
+	def test_create_school(self):
+		with patch(
+			"core.views.SchoolService.create",
+			return_value={"id": "sch-1", "name": "École B", "code": "ECB", "is_active": True},
+		):
+			response = self.client.post(
+				"/api/v1/schools/",
+				{"name": "École B", "code": "ECB"},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["code"], "ECB")
+
+	def test_list_academic_years(self):
+		with patch(
+			"core.views.AcademicYearService.list",
+			return_value=[{"id": "ay-1", "name": "2026-2027", "start_date": "2026-09-01", "end_date": "2027-06-30", "is_active": True}],
+		):
+			response = self.client.get("/api/v1/academic-years/?school_id=sch-1")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data), 1)
+
+	def test_patch_academic_year_activation(self):
+		with patch(
+			"core.views.AcademicYearService.update",
+			return_value={
+				"id": "ay-1",
+				"name": "2026-2027",
+				"start_date": "2026-09-01",
+				"end_date": "2027-06-30",
+				"is_active": True,
+			},
+		) as update_mock:
+			response = self.client.patch(
+				"/api/v1/academic-years/ay-1/",
+				{"is_active": True, "start_date": "2026-09-01"},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data["is_active"])
+		update_mock.assert_called_once()

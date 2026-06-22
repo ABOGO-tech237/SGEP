@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from accounts.models import ACCOUNT_STATUS_ACTIVE, ROLE_SUPERADMIN, User
 from core.admin_dashboard_service import AdminDashboardService
+from core.views import AdminDashboardView
 
 
 class AdminDashboardServiceTests(SimpleTestCase):
@@ -71,6 +72,9 @@ class AdminDashboardApiTests(SimpleTestCase):
 		self.client.force_authenticate(user=self.user)
 
 	def test_dashboard_endpoint(self):
+		factory = APIRequestFactory()
+		request = factory.get("/api/v1/admin/dashboard/")
+		force_authenticate(request, user=self.user)
 		with patch(
 			"core.views.AdminDashboardService.build",
 			return_value={
@@ -81,7 +85,7 @@ class AdminDashboardApiTests(SimpleTestCase):
 				"recent_activity": [],
 			},
 		):
-			response = self.client.get("/api/v1/admin/dashboard/")
+			response = AdminDashboardView.as_view()(request)
 
 		self.assertEqual(response.status_code, 200)
 		self.assertIn("generated_at", response.data)

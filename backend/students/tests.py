@@ -239,3 +239,107 @@ class StudentApiTests(SimpleTestCase):
 		self.assertEqual(response.data["job_id"], "job-1")
 		job_mock.assert_called_once()
 		delay_mock.assert_called_once()
+
+	def test_export_excel_dispatches_task(self):
+		with patch("students.views.StudentService.create_export_job", return_value={"id": "job-2"}) as job_mock, patch(
+			"reports.tasks.generate_students_excel_task.delay"
+		) as delay_mock:
+			response = self.client.get("/api/v1/students/export/excel/")
+
+		self.assertEqual(response.status_code, 202)
+		self.assertEqual(response.data["job_id"], "job-2")
+		job_mock.assert_called_once()
+		delay_mock.assert_called_once()
+
+	def test_get_student_detail(self):
+		student = {
+			"id": "stu-1",
+			"first_name": "Awa",
+			"last_name": "Nana",
+			"matricule": "MAT-001",
+			"birth_date": "2014-01-01T00:00:00+00:00",
+			"birth_place": "Yaounde",
+			"gender": "F",
+			"class_id": "class-a",
+			"academic_year_id": "ay-2026",
+			"medical": "",
+			"history": "[]",
+		}
+		with patch("students.views.StudentService.get", return_value=student):
+			response = self.client.get("/api/v1/students/stu-1/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["matricule"], "MAT-001")
+
+	def test_patch_student_update(self):
+		student = {
+			"id": "stu-1",
+			"first_name": "Awa",
+			"last_name": "Nana",
+			"matricule": "MAT-001",
+			"birth_date": "2014-01-01T00:00:00+00:00",
+			"birth_place": "Yaounde",
+			"gender": "F",
+			"class_id": "class-b",
+			"academic_year_id": "ay-2026",
+			"medical": "",
+		}
+		with patch("students.serializers.StudentRepository.find_by_matricule", return_value=None), patch(
+			"students.views.StudentService.update",
+			return_value=student,
+		) as update_mock:
+			response = self.client.patch("/api/v1/students/stu-1/", {"class_id": "class-b"}, format="json")
+
+		self.assertEqual(response.status_code, 200)
+		update_mock.assert_called_once()
+
+	def test_delete_student_soft_delete(self):
+		with patch("students.views.StudentService.soft_delete") as delete_mock:
+			response = self.client.delete("/api/v1/students/stu-1/")
+
+		self.assertEqual(response.status_code, 204)
+		delete_mock.assert_called_once_with("stu-1")
+
+	def test_get_student_history(self):
+		history = [{"event": "create", "at": "2026-01-01T00:00:00+00:00"}]
+		with patch("students.views.StudentService.history", return_value=history):
+			response = self.client.get("/api/v1/students/stu-1/history/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["history"], history)
+
+	def test_enroll_endpoint_reactivates_and_creates_insc(self):
+		student = {
+			"id": "stu-1",
+			"first_name": "Awa",
+			"last_name": "Nana",
+			"matricule": "MAT-001",
+			"birth_date": "2014-01-01T00:00:00+00:00",
+			"birth_place": "Yaounde",
+			"gender": "F",
+			"class_id": "class-a",
+			"academic_year_id": "ay-2026",
+			"medical": "",
+		}
+		with patch("students.views.StudentService.enroll", return_value=student) as enroll_mock:
+			response = self.client.post(
+				"/api/v1/students/stu-1/enroll/",
+				{"class_id": "class-a", "academic_year_id": "ay-2026"},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 200)
+		enroll_mock.assert_called_once_with("stu-1", "class-a", "ay-2026")
+
+	def test_students_endpoints_reject_comptable(self):
+		from accounts.models import ROLE_COMPTABLE
+
+		comptable = User(
+			id=uuid.uuid4(),
+			email="comptable@example.com",
+			role=ROLE_COMPTABLE,
+			account_status=ACCOUNT_STATUS_ACTIVE,
+		)
+		self.client.force_authenticate(user=comptable)
+		response = self.client.get("/api/v1/students/")
+		self.assertEqual(response.status_code, 403)
