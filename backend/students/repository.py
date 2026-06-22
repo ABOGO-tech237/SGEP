@@ -90,7 +90,7 @@ class StudentRepository:
                 {
                     "is_active": False,
                     "is_deleted": True,
-                    "deleted_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
             return _normalize_document(document)

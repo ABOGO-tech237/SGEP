@@ -205,3 +205,27 @@ class AttendanceApiTests(SimpleTestCase):
 		self.assertEqual(response.data["job_id"], "job-1")
 		job_mock.assert_called_once()
 		delay_mock.assert_called_once()
+
+	def test_post_attendance_justify(self):
+		with patch(
+			"attendance.views.AttendanceService.justify",
+			return_value={
+				"id": "att-1",
+				"student_id": "stu-1",
+				"class_id": "class-a",
+				"date": "2026-06-01T00:00:00+00:00",
+				"status": "ABSENT_JUSTIFIE",
+				"reason": "Certificat médical",
+				"academic_year_id": "ay-2026",
+				"recorded_by": "admin-1",
+			},
+		) as justify_mock:
+			response = self.client.post(
+				"/api/v1/attendance/att-1/justify/",
+				{"motif": "Certificat médical"},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["type"], "absent_justifie")
+		justify_mock.assert_called_once_with("att-1", "Certificat médical")

@@ -42,3 +42,29 @@ class ReportJobApiTests(SimpleTestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data["status"], "processing")
+
+
+class ReportTaskTests(SimpleTestCase):
+	def test_generate_finance_export_task_marks_job_done(self):
+		from reports.tasks import generate_finance_export_task
+
+		with patch("reports.tasks.ReportJobRepository.update") as update_mock, patch(
+			"reports.tasks.excel_export.export_finance",
+			return_value="/tmp/finance.xlsx",
+		):
+			generate_finance_export_task("job-1", {"academic_year_id": "ay-1"})
+
+		self.assertEqual(update_mock.call_count, 2)
+		self.assertEqual(update_mock.call_args_list[-1][0][1]["status"], "done")
+
+	def test_generate_students_excel_task_marks_job_done(self):
+		from reports.tasks import generate_students_excel_task
+
+		with patch("reports.tasks.ReportJobRepository.update") as update_mock, patch(
+			"reports.tasks.excel_export.export_students",
+			return_value="/tmp/students.xlsx",
+		):
+			generate_students_excel_task("job-2", {"academic_year_id": "ay-1", "class_id": "class-a"})
+
+		self.assertEqual(update_mock.call_count, 2)
+		self.assertEqual(update_mock.call_args_list[-1][0][1]["status"], "done")

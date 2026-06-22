@@ -123,3 +123,59 @@ class GradeApiTests(SimpleTestCase):
 		self.assertEqual(response.status_code, 202)
 		self.assertEqual(response.data["job_id"], "job-1")
 		delay_mock.assert_called_once()
+
+	def test_report_card_status(self):
+		with patch(
+			"grades.views.ReportCardService.get_job_status",
+			return_value={"status": "processing", "progress": 50, "file_path": ""},
+		):
+			response = self.client.get("/api/v1/report-cards/job-1/status/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["progress"], 50)
+
+	def test_report_card_publish(self):
+		with patch(
+			"grades.views.ReportCardService.publish",
+			return_value={
+				"id": "rc-1",
+				"student_id": "stu-1",
+				"academic_year_id": "ay-1",
+				"sequence": "seq-1",
+				"period_id": "seq-1",
+				"status": "published",
+				"file_path": "/tmp/bulletin.pdf",
+				"generated_at": "2026-06-01T00:00:00+00:00",
+			},
+		) as publish_mock:
+			response = self.client.post("/api/v1/report-cards/rc-1/publish/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["status"], "published")
+		publish_mock.assert_called_once_with("rc-1")
+
+	def test_report_card_download(self):
+		import os
+		import tempfile
+
+		with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+			tmp.write(b"pdf-content")
+			tmp_path = tmp.name
+
+		try:
+			with patch(
+				"grades.views.ReportCardService.get",
+				return_value={
+					"id": "rc-1",
+					"student_id": "stu-1",
+					"sequence": "seq-1",
+					"period_id": "seq-1",
+					"status": "published",
+					"file_path": tmp_path,
+				},
+			):
+				response = self.client.get("/api/v1/report-cards/rc-1/download/")
+
+			self.assertEqual(response.status_code, 200)
+		finally:
+			os.unlink(tmp_path)
