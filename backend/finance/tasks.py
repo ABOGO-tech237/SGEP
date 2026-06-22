@@ -36,7 +36,7 @@ def generate_receipt_task(self, payment_id: str) -> None:
 			pdf_path = RECEIPTS_DIR / f"receipt_{payment_id}.pdf"
 			HTML(string=html_content).write_pdf(str(pdf_path))
 			file_path = pdf_path
-		except ImportError:  # pragma: no cover
+		except Exception:  # pragma: no cover — WeasyPrint optional or broken (e.g. pydyf mismatch)
 			pass
 
 		PaymentRepository.update(payment_id, {"receipt_path": str(file_path)})

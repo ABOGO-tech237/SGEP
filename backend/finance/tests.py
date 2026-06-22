@@ -227,7 +227,10 @@ class FinanceTaskTests(SimpleTestCase):
 		), patch("finance.tasks.PaymentRepository.update") as update_mock, patch(
 			"finance.tasks.render_to_string",
 			return_value="<html><body>Receipt</body></html>",
-		):
+		), patch("weasyprint.HTML") as html_mock:
+			html_mock.return_value.write_pdf.side_effect = lambda path: Path(path).write_bytes(
+				b"%PDF-1.4"
+			)
 			generate_receipt_task("pay-1")
 
 		update_mock.assert_called_once()
