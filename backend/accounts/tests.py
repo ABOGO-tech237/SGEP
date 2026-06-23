@@ -219,3 +219,31 @@ class BootstrapApiTests(SimpleTestCase):
 		)
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data["action"], "updated")
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "test-bootstrap-secret")
+	@patch("accounts.views.settings.APPWRITE_PROJECT_ID", "")
+	@patch("accounts.views.settings.APPWRITE_API_KEY", "")
+	def test_bootstrap_appwrite_unconfigured(self):
+		response = self.client.post(
+			self.url,
+			self.payload,
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN=self.secret,
+		)
+		self.assertEqual(response.status_code, 503)
+		self.assertIn("Appwrite", response.data["detail"])
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "test-bootstrap-secret")
+	@patch("accounts.views.UserRepository.count")
+	def test_bootstrap_appwrite_unavailable(self, count_mock):
+		from appwrite.exception import AppwriteException
+
+		count_mock.side_effect = AppwriteException("project not found")
+		response = self.client.post(
+			self.url,
+			self.payload,
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN=self.secret,
+		)
+		self.assertEqual(response.status_code, 503)
+		self.assertIn("Appwrite", response.data["detail"])

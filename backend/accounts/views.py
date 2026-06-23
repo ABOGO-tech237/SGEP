@@ -1,13 +1,13 @@
 import importlib
 import secrets
 
+from appwrite.exception import AppwriteException
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from appwrite.query import Query
 
 try:
 	ratelimit = importlib.import_module("django_ratelimit.decorators").ratelimit
@@ -47,12 +47,23 @@ class LoginView(APIView):
 		return Response(tokens, status=status.HTTP_200_OK)
 
 
-@method_decorator(ratelimit(key="ip", rate="3/h", method="POST", block=True), name="post")
 class BootstrapView(APIView):
 	"""One-time admin bootstrap when shell access is unavailable (e.g. Render free tier)."""
 
 	authentication_classes: list = []
 	permission_classes: list = []
+
+	def _appwrite_unconfigured_response(self) -> Response:
+		return Response(
+			{
+				"detail": (
+					"Configuration Appwrite incomplète. "
+					"Vérifiez APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, "
+					"APPWRITE_API_KEY et APPWRITE_DB_ID sur Render."
+				)
+			},
+			status=status.HTTP_503_SERVICE_UNAVAILABLE,
+		)
 
 	def post(self, request):
 		secret = settings.BOOTSTRAP_SECRET
@@ -66,7 +77,18 @@ class BootstrapView(APIView):
 				status=status.HTTP_403_FORBIDDEN,
 			)
 
-		if UserRepository.count() > 0 and "email" not in request.data:
+		if not settings.APPWRITE_PROJECT_ID or not settings.APPWRITE_API_KEY:
+			return self._appwrite_unconfigured_response()
+
+		try:
+			user_count = UserRepository.count()
+		except AppwriteException as exc:
+			return Response(
+				{"detail": f"Service Appwrite indisponible: {exc}"},
+				status=status.HTTP_503_SERVICE_UNAVAILABLE,
+			)
+
+		if user_count > 0 and "email" not in request.data:
 			return Response(
 				{
 					"detail": (
@@ -82,8 +104,19 @@ class BootstrapView(APIView):
 
 		try:
 			result = create_or_reset_login_user(**serializer.validated_data)
+		except AppwriteException as exc:
+			return Response(
+				{"detail": f"Service Appwrite indisponible: {exc}"},
+				status=status.HTTP_503_SERVICE_UNAVAILABLE,
+			)
 		except Exception as exc:
-			return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+			message = str(exc)
+			if "Appwrite" in message or "appwrite" in message.lower():
+				return Response(
+					{"detail": message},
+					status=status.HTTP_503_SERVICE_UNAVAILABLE,
+				)
+			return Response({"detail": message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 		http_status = (
 			status.HTTP_201_CREATED if result["action"] == "created" else status.HTTP_200_OK

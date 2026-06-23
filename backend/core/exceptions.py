@@ -16,3 +16,9 @@ class AccountSuspendedError(APIException):
     status_code = status.HTTP_403_FORBIDDEN
     default_code = "ACCOUNT_SUSPENDED"
     default_detail = "Compte parent suspendu. Veuillez renouveler l'inscription."
+
+
+class ServiceUnavailableError(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_code = "SERVICE_UNAVAILABLE"
+    default_detail = "Service temporairement indisponible."
