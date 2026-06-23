@@ -1,0 +1,20 @@
+# Frontend local environment (do NOT commit)
+
+# Browser-visible Appwrite config
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=6a11ae3d002ce9eb8fd1
+NEXT_PUBLIC_APPWRITE_TEAM_ADMINS=6a11d7a7000f1cd749f7
+NEXT_PUBLIC_APPWRITE_TEAM_TEACHERS=teachers
+NEXT_PUBLIC_APPWRITE_TEAM_STUDENTS=students
+NEXT_PUBLIC_APPWRITE_TEAM_PARENTS=parents
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Server-only Appwrite config (login route handler)
+APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+APPWRITE_PROJECT_ID=6a11ae3d002ce9eb8fd1
+APPWRITE_API_KEY=standard_5ef1fff1a4548cc16fb170c2dffe6cf95682ec21c3a9b880cbb08c0837911dc889af2bc915ee35d8571db60e44bf2eb213c1959b53118dcfabbff223a820e3a1f453d65c429d7ae1446e46e6fbe95988ea64f522584880741b1786b580992c864198b8875bfe2e664ec27ee1f7c897313c83d60cbcb7515555d64c9e4828057a
+
+# Django API proxy (business routes only — login does not use Django auth)
+DJANGO_API_URL=http://localhost:8000/api/v1/
+
+JWT_SECRET=change-me-to-a-long-random-secret-at-least-32-chars

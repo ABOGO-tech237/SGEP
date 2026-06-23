@@ -1,0 +1,16 @@
+Django>=4.2,<5
+djangorestframework>=3.15,<4
+appwrite>=7.0.1,<8
+redis>=5,<6
+celery>=5.4,<6
+django-celery-beat>=2.7,<3
+weasyprint>=61,<62
+pandas>=2.0,<3
+openpyxl>=3.1,<4
+djangorestframework-simplejwt>=5,<6
+django-ratelimit>=4,<5
+python-decouple>=3.8,<4
+gunicorn>=22,<23
+django-cors-headers>=4.4,<5
+drf-spectacular>=0.27,<1
+cryptography>=42,<44
