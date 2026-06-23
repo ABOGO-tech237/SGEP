@@ -6,6 +6,8 @@ from appwrite.services.databases import Databases
 from appwrite.services.messaging import Messaging
 from appwrite.services.users import Users
 
+from core.appwrite_utils import install_appwrite_get_body_shim
+
 
 def _validate_appwrite_endpoint() -> None:
     endpoint = settings.APPWRITE_ENDPOINT or ""
@@ -20,6 +22,7 @@ def _validate_appwrite_endpoint() -> None:
 
 
 _validate_appwrite_endpoint()
+install_appwrite_get_body_shim()
 
 client = Client()
 client.set_endpoint(settings.APPWRITE_ENDPOINT)

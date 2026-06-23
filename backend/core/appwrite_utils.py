@@ -20,6 +20,31 @@ working regardless of SDK version.
 """
 
 
+def install_appwrite_get_body_shim() -> None:
+	"""Stop the Appwrite Python SDK from sending a body on GET requests.
+
+	Appwrite Cloud rejects GET requests that carry a JSON body (HTTP 400:
+	``request cannot have request body``). SDK 7.x serializes empty params to
+	``"{}"`` and sends it as a body on GET requests. Stripping the content-type
+	header makes the SDK skip ``json.dumps`` and send no body.
+	"""
+	from appwrite.client import Client
+
+	if getattr(Client, "_sgep_get_body_shim", False):
+		return
+
+	_original_call = Client.call
+
+	def _patched_call(self, method, path="", headers=None, params=None, response_type="json"):
+		if str(method).lower() == "get":
+			headers = dict(headers or {})
+			headers["content-type"] = ""
+		return _original_call(self, method, path, headers, params, response_type)
+
+	Client.call = _patched_call
+	Client._sgep_get_body_shim = True
+
+
 def _user_data(obj: Any) -> dict | None:
 	"""Return the user-defined fields stored on an Appwrite Document, if any."""
 	data = getattr(obj, "_data", None)
