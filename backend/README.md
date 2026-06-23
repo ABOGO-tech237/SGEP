@@ -33,6 +33,26 @@ Endpoints : `POST /api/v1/auth/login/`, `refresh/`, `logout/`, `change-password/
 
 Rôles : `superadmin`, `comptable`, `parent`. Permissions DRF dans `accounts/permissions.py`.
 
+### Premier admin sans accès shell (Render)
+
+Si vous n'avez pas accès au shell Render, créez le premier utilisateur via l'endpoint bootstrap :
+
+1. Générez un secret fort (ex. `openssl rand -hex 32`).
+2. Sur Render → **Environment** → ajoutez `BOOTSTRAP_SECRET=<votre secret>` puis redéployez.
+3. Appelez l'endpoint (depuis votre machine) :
+
+```bash
+curl -X POST https://sgep-i2b9.onrender.com/api/v1/auth/bootstrap/ \
+  -H "X-Bootstrap-Token: VOTRE_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@sgep.cm","password":"AdminPassword123!","role":"superadmin"}'
+```
+
+4. Connectez-vous sur le frontend Vercel avec ces identifiants.
+5. **Supprimez `BOOTSTRAP_SECRET`** sur Render et redéployez (l'endpoint renvoie alors 404).
+
+Alternative locale : `python manage.py create_login_user` avec les variables `APPWRITE_*` de production dans `.env.local`.
+
 ## Endpoints principaux
 
 ### Core

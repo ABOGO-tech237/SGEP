@@ -57,6 +57,10 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="")
 JWT_ACCESS_TOKEN_LIFETIME = config("JWT_ACCESS_TOKEN_LIFETIME", default=900, cast=int)
 JWT_REFRESH_TOKEN_LIFETIME = config("JWT_REFRESH_TOKEN_LIFETIME", default=604800, cast=int)
 
+# One-time bootstrap: POST /api/v1/auth/bootstrap/ with X-Bootstrap-Token header.
+# Leave empty in production after creating the first admin user.
+BOOTSTRAP_SECRET = config("BOOTSTRAP_SECRET", default="")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

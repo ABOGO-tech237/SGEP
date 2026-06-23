@@ -132,3 +132,90 @@ class AuthApiTests(SimpleTestCase):
 			)
 
 		self.assertEqual(response.status_code, 401)
+
+
+class BootstrapApiTests(SimpleTestCase):
+	def setUp(self):
+		self.client = APIClient()
+		self.url = "/api/v1/auth/bootstrap/"
+		self.secret = "test-bootstrap-secret"
+		self.payload = {
+			"email": "admin@sgep.cm",
+			"password": "AdminPassword123!",
+			"role": "superadmin",
+		}
+		self.created_result = {
+			"action": "created",
+			"email": "admin@sgep.cm",
+			"auth_id": "auth-1",
+			"user_id": "user-1",
+			"role": "superadmin",
+		}
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "")
+	def test_bootstrap_disabled_without_secret(self):
+		response = self.client.post(
+			self.url,
+			self.payload,
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN="anything",
+		)
+		self.assertEqual(response.status_code, 404)
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "test-bootstrap-secret")
+	def test_bootstrap_wrong_token(self):
+		response = self.client.post(
+			self.url,
+			self.payload,
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN="wrong",
+		)
+		self.assertEqual(response.status_code, 403)
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "test-bootstrap-secret")
+	@patch("accounts.views.UserRepository.count", return_value=1)
+	def test_bootstrap_conflict_when_users_exist_without_email(self, _count_mock):
+		response = self.client.post(
+			self.url,
+			{"password": "AdminPassword123!", "role": "superadmin"},
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN=self.secret,
+		)
+		self.assertEqual(response.status_code, 409)
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "test-bootstrap-secret")
+	@patch("accounts.views.create_or_reset_login_user", return_value=None)
+	@patch("accounts.views.UserRepository.count", return_value=0)
+	def test_bootstrap_create_success(self, _count_mock, create_mock):
+		create_mock.return_value = self.created_result
+		response = self.client.post(
+			self.url,
+			self.payload,
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN=self.secret,
+		)
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["action"], "created")
+		create_mock.assert_called_once()
+
+	@patch("accounts.views.settings.BOOTSTRAP_SECRET", "test-bootstrap-secret")
+	@patch("accounts.views.create_or_reset_login_user")
+	@patch("accounts.views.UserRepository.count", return_value=2)
+	def test_bootstrap_update_with_explicit_email(self, _count_mock, create_mock):
+		create_mock.return_value = {
+			"action": "updated",
+			"email": "admin@sgep.cm",
+			"user_id": "user-1",
+			"auth_id": "user-1",
+			"role": "superadmin",
+			"auth_updated": True,
+			"auth_error": None,
+		}
+		response = self.client.post(
+			self.url,
+			self.payload,
+			format="json",
+			HTTP_X_BOOTSTRAP_TOKEN=self.secret,
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["action"], "updated")

@@ -1,27 +1,21 @@
 """Create or reset a single Appwrite user with a hashed password for Django login."""
 
-from datetime import datetime
-
-from django.contrib.auth.hashers import make_password
 from django.core.management.base import BaseCommand
 
-from accounts.auth_service import AppwriteAuthService
-from accounts.models import (
-    ACCOUNT_STATUS_ACTIVE,
-    ROLE_COMPTABLE,
-    ROLE_PARENT,
-    ROLE_SUPERADMIN,
-)
-from accounts.repository import UserRepository
+from accounts.login_user_service import create_or_reset_login_user
+from accounts.models import ROLE_COMPTABLE, ROLE_PARENT, ROLE_SUPERADMIN
 
 
 class Command(BaseCommand):
     help = (
         "Crée un utilisateur Appwrite (auth + document users) avec mot de passe hashé "
         "pour la connexion via auth/login/.\n\n"
-        "Exemple (Render shell) :\n"
+        "Exemple (shell local ou Render) :\n"
         "  python manage.py create_login_user\n"
         "  python manage.py create_login_user --email admin@sgep.cm --password AdminPassword123!\n\n"
+        "Sans accès shell (ex. Render) : définir BOOTSTRAP_SECRET sur le serveur, "
+        "puis POST /api/v1/auth/bootstrap/ avec l'en-tête X-Bootstrap-Token "
+        "(voir backend/README.md).\n\n"
         "Identifiants par défaut : admin@sgep.cm / AdminPassword123! (superadmin)"
     )
 
@@ -59,54 +53,48 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        email = options["email"].strip().lower()
+        email = options["email"]
         password = options["password"]
         role = options["role"]
         first_name = options["first_name"]
         last_name = options["last_name"]
 
-        existing = UserRepository.get_by_email(email=email)
-        if existing:
-            self.stdout.write(f"Utilisateur existant ({email}), mise à jour du mot de passe...")
-            user_id = existing.get("id")
-            now_iso = datetime.utcnow().isoformat()
-            UserRepository.update(
-                user_id=user_id,
-                data={
-                    "password": make_password(password),
-                    "updated_at": now_iso,
-                },
-            )
-            auth_id = user_id
-            try:
-                AppwriteAuthService.update_user_password(user_id=user_id, password=password)
-            except Exception as exc:
+        existing_msg = f"Utilisateur existant ({email.strip().lower()}), mise à jour du mot de passe..."
+        create_msg = f"Création de l'utilisateur {email.strip().lower()} (role={role})..."
+
+        from accounts.repository import UserRepository
+
+        if UserRepository.get_by_email(email=email.strip().lower()):
+            self.stdout.write(existing_msg)
+        else:
+            self.stdout.write(create_msg)
+
+        result = create_or_reset_login_user(
+            email=email,
+            password=password,
+            role=role,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+        if result["action"] == "updated":
+            if not result.get("auth_updated"):
                 self.stdout.write(
                     self.style.WARNING(
-                        f"Document users mis à jour, mais auth Appwrite non mis à jour : {exc}"
+                        "Document users mis à jour, mais auth Appwrite non mis à jour : "
+                        f"{result.get('auth_error')}"
                     )
                 )
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Mot de passe mis à jour pour {email}\n"
-                    f"   User ID: {user_id}\n"
-                    f"   Auth ID: {auth_id}\n"
-                    f"   Role: {existing.get('role', role)}"
+                    f"Mot de passe mis à jour pour {result['email']}\n"
+                    f"   User ID: {result['user_id']}\n"
+                    f"   Auth ID: {result['auth_id']}\n"
+                    f"   Role: {result['role']}"
                 )
             )
             return
 
-        self.stdout.write(f"Création de l'utilisateur {email} (role={role})...")
-        result = AppwriteAuthService.create_user_with_auth(
-            email=email,
-            password=password,
-            user_data={
-                "first_name": first_name,
-                "last_name": last_name,
-                "role": role,
-                "account_status": ACCOUNT_STATUS_ACTIVE,
-            },
-        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Utilisateur créé avec succès !\n"
