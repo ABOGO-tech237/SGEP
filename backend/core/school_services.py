@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from core.exceptions import NotFoundError
-from core.repository import AcademicYearRepository, SchoolRepository
+from core.repository import AcademicYearRepository, LevelRepository, SchoolRepository
 
 
 class SchoolService:
@@ -76,3 +76,16 @@ class AcademicYearService:
 	@staticmethod
 	def get_active() -> dict | None:
 		return AcademicYearRepository.get_active()
+
+
+class LevelService:
+	@staticmethod
+	def list() -> list[dict]:
+		return LevelRepository.list()
+
+	@staticmethod
+	def get(level_id: str) -> dict:
+		level = LevelRepository.get(level_id)
+		if not level:
+			raise NotFoundError(f"Niveau {level_id} introuvable.")
+		return level
