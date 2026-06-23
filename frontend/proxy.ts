@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import {
   ROLE_ROUTE_PREFIX,
   ROLE_COOKIE,
+  USER_ROLES,
   type UserRole,
 } from "@/lib/auth/constants";
 
@@ -18,14 +19,16 @@ function buildCsp(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "font-src 'self'",
+    "font-src 'self' data:",
     `connect-src 'self' ${appwriteOrigin}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
   ];
+  if (!isDev) {
+    directives.push("upgrade-insecure-requests");
+  }
   return directives.join("; ");
 }
 
@@ -40,12 +43,24 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
   );
 }
 
+function canAccessRoute(role: UserRole, pathname: string): boolean {
+  const allowedPrefix = ROLE_ROUTE_PREFIX[role];
+  if (allowedPrefix && pathname.startsWith(allowedPrefix)) {
+    return true;
+  }
+  if (role === USER_ROLES.ADMIN && pathname.startsWith("/accountant")) {
+    return true;
+  }
+  return false;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
   const isProtectedRoute =
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/accountant") ||
     pathname.startsWith("/teacher") ||
     pathname.startsWith("/student") ||
     pathname.startsWith("/parent");
@@ -61,15 +76,14 @@ export async function proxy(request: NextRequest) {
   }
 
   const role = request.cookies.get(ROLE_COOKIE)?.value as UserRole | undefined;
-  const allowedPrefix = role ? ROLE_ROUTE_PREFIX[role] : undefined;
 
-  if (!allowedPrefix || !pathname.startsWith(allowedPrefix)) {
+  if (!role || !canAccessRoute(role, pathname)) {
     return NextResponse.redirect(new URL(LOGIN_URL, request.url));
   }
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
-  requestHeaders.set("x-user-role", role!);
+  requestHeaders.set("x-user-role", role);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   applySecurityHeaders(response, nonce);

@@ -1,85 +1,56 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from appwrite.exception import AppwriteException
 from appwrite.query import Query
 from django.conf import settings
 
 from config.appwrite_client import databases
+from core.appwrite_utils import documents_of, to_dict
 
 DB_ID = settings.APPWRITE_DB_ID
-PARENTS_COLLECTION_ID = "parents"
-PARENT_STUDENT_COLLECTION_ID = "parent_student"
+COLLECTION_ID = "messages"
 
 
-class ParentRepository:
-    @staticmethod
-    def _normalize(document: dict) -> dict:
-        normalized = dict(document)
-        normalized["id"] = document.get("$id", document.get("id"))
-        return normalized
-
-    @staticmethod
-    def get_by_email(email: str) -> dict | None:
-        try:
-            response = databases.list_documents(DB_ID, PARENTS_COLLECTION_ID, [Query.equal("email", [email.lower()])])
-            documents = response.get("documents", [])
-            if not documents:
-                return None
-            return ParentRepository._normalize(documents[0])
-        except AppwriteException:
-            raise
-
-    @staticmethod
-    def create(data: dict) -> dict:
-        try:
-            document = databases.create_document(DB_ID, PARENTS_COLLECTION_ID, "unique()", data)
-            return ParentRepository._normalize(document)
-        except AppwriteException:
-            raise
+def _normalize(document: dict) -> dict:
+	document = to_dict(document)
+	result = dict(document)
+	result["id"] = document.get("$id", document.get("id"))
+	return result
 
 
-class ParentStudentRepository:
-    @staticmethod
-    def _normalize(document: dict) -> dict:
-        normalized = dict(document)
-        normalized["id"] = document.get("$id", document.get("id"))
-        return normalized
+def _now() -> str:
+	return datetime.now(timezone.utc).isoformat()
 
-    @staticmethod
-    def list_by_student_id(student_id: str) -> list[dict]:
-        try:
-            response = databases.list_documents(
-                DB_ID,
-                PARENT_STUDENT_COLLECTION_ID,
-                [Query.equal("student_id", [student_id]), Query.equal("is_deleted", [False])],
-            )
-            return [ParentStudentRepository._normalize(document) for document in response.get("documents", [])]
-        except AppwriteException:
-            raise
 
-    @staticmethod
-    def find_link(student_id: str, email: str) -> dict | None:
-        try:
-            response = databases.list_documents(
-                DB_ID,
-                PARENT_STUDENT_COLLECTION_ID,
-                [
-                    Query.equal("student_id", [student_id]),
-                    Query.equal("email", [email.lower()]),
-                    Query.equal("is_deleted", [False]),
-                ],
-            )
-            documents = response.get("documents", [])
-            if not documents:
-                return None
-            return ParentStudentRepository._normalize(documents[0])
-        except AppwriteException:
-            raise
+class MessageRepository:
+	@staticmethod
+	def list_for_user(user_id: str) -> list[dict]:
+		try:
+			response = databases.list_documents(
+				DB_ID,
+				COLLECTION_ID,
+				[
+					Query.equal("recipient_id", [user_id]),
+					Query.equal("is_deleted", [False]),
+					Query.order_desc("created_at"),
+				],
+			)
+			return [_normalize(doc) for doc in documents_of(response)]
+		except AppwriteException:
+			raise
 
-    @staticmethod
-    def create(data: dict) -> dict:
-        try:
-            document = databases.create_document(DB_ID, PARENT_STUDENT_COLLECTION_ID, "unique()", data)
-            return ParentStudentRepository._normalize(document)
-        except AppwriteException:
-            raise
+	@staticmethod
+	def create(data: dict) -> dict:
+		payload = {
+			**data,
+			"is_read": False,
+			"is_deleted": False,
+			"created_at": _now(),
+			"updated_at": _now(),
+		}
+		try:
+			return _normalize(databases.create_document(DB_ID, COLLECTION_ID, "unique()", payload))
+		except AppwriteException:
+			raise

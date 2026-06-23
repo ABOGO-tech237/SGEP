@@ -1,121 +1,134 @@
-"""Test user creation for all types."""
-
 from __future__ import annotations
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase
+import uuid
+from unittest.mock import patch
 
-User = get_user_model()
+from django.contrib.auth.hashers import make_password
+from django.test import SimpleTestCase
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from accounts.models import ACCOUNT_STATUS_ACTIVE, ROLE_SUPERADMIN, User
 
 
-class UserCreationTests(TestCase):
-    """Test user creation for all role types."""
+class AuthApiTests(SimpleTestCase):
+	def setUp(self):
+		self.client = APIClient()
+		self.user_id = str(uuid.uuid4())
+		self.password = "SecurePass123!"
+		self.user_payload = {
+			"id": self.user_id,
+			"email": "admin@example.com",
+			"password": make_password(self.password),
+			"role": ROLE_SUPERADMIN,
+			"account_status": ACCOUNT_STATUS_ACTIVE,
+			"student_id": None,
+		}
+		self.user = User.from_appwrite(self.user_payload)
 
-    def test_create_superadmin_user(self) -> None:
-        """Test creating a superadmin user."""
-        user = User.objects.create_superuser(
-            email="admin@sgep.cm",
-            password="TestPass123!",
-        )
+	def test_login_success(self):
+		with patch("accounts.services.UserRepository.get_by_email", return_value=self.user_payload):
+			response = self.client.post(
+				"/api/v1/auth/login/",
+				{"email": "admin@example.com", "password": self.password},
+				format="json",
+			)
 
-        self.assertEqual(user.email, "admin@sgep.cm")
-        self.assertEqual(user.role, "superadmin")
-        self.assertEqual(user.account_status, "active")
-        self.assertTrue(user.is_staff)
-        self.assertTrue(user.is_superuser)
-        self.assertTrue(user.is_active)
+		self.assertEqual(response.status_code, 200)
+		self.assertIn("access_token", response.data)
+		self.assertIn("refresh_token", response.data)
 
-    def test_create_comptable_user(self) -> None:
-        """Test creating an accountant user."""
-        user = User.objects.create_user(
-            email="accounts@sgep.cm",
-            password="TestPass123!",
-            role="comptable",
-            account_status="active",
-        )
+	def test_login_invalid_credentials(self):
+		with patch("accounts.services.UserRepository.get_by_email", return_value=None):
+			response = self.client.post(
+				"/api/v1/auth/login/",
+				{"email": "wrong@example.com", "password": "bad"},
+				format="json",
+			)
 
-        self.assertEqual(user.email, "accounts@sgep.cm")
-        self.assertEqual(user.role, "comptable")
-        self.assertEqual(user.account_status, "active")
-        self.assertFalse(user.is_staff)
-        self.assertFalse(user.is_superuser)
-        self.assertTrue(user.is_active)
+		self.assertEqual(response.status_code, 403)
 
-    def test_create_parent_user(self) -> None:
-        """Test creating a parent user."""
-        user = User.objects.create_user(
-            email="parent@example.cm",
-            password="TestPass123!",
-            role="parent",
-            account_status="active",
-        )
+	def test_refresh_success(self):
+		refresh = RefreshToken.for_user(self.user)
+		refresh["role"] = self.user.role
+		refresh["account_status"] = self.user.account_status
+		refresh["email"] = self.user.email
+		refresh["student_id"] = self.user.student_id
 
-        self.assertEqual(user.email, "parent@example.cm")
-        self.assertEqual(user.role, "parent")
-        self.assertEqual(user.account_status, "active")
-        self.assertFalse(user.is_staff)
-        self.assertFalse(user.is_superuser)
-        self.assertTrue(user.is_active)
+		with patch("accounts.services.RefreshTokenBlacklistRepository.is_blacklisted", return_value=False):
+			response = self.client.post(
+				"/api/v1/auth/refresh/",
+				{"refresh": str(refresh)},
+				format="json",
+			)
 
-    def test_create_user_without_email_fails(self) -> None:
-        """Test creating a user without email raises error."""
-        with self.assertRaises(ValueError) as context:
-            User.objects.create_user(
-                email="",
-                password="TestPass123!",
-            )
+		self.assertEqual(response.status_code, 200)
+		self.assertIn("access_token", response.data)
 
-        self.assertIn("email", str(context.exception).lower())
+	def test_refresh_blacklisted_token(self):
+		refresh = RefreshToken.for_user(self.user)
 
-    def test_create_user_with_suspended_status(self) -> None:
-        """Test creating a user with suspended status."""
-        user = User.objects.create_user(
-            email="suspended@sgep.cm",
-            password="TestPass123!",
-            role="comptable",
-            account_status="suspended",
-        )
+		with patch("accounts.services.RefreshTokenBlacklistRepository.is_blacklisted", return_value=True):
+			response = self.client.post(
+				"/api/v1/auth/refresh/",
+				{"refresh": str(refresh)},
+				format="json",
+			)
 
-        self.assertEqual(user.account_status, "suspended")
-        self.assertTrue(user.is_active)  # is_active != account_status
+		self.assertEqual(response.status_code, 403)
 
-    def test_user_password_hashing(self) -> None:
-        """Test that user passwords are hashed."""
-        password = "TestPass123!"
-        user = User.objects.create_user(
-            email="user@sgep.cm",
-            password=password,
-        )
+	def test_logout_blacklists_token(self):
+		refresh = RefreshToken.for_user(self.user)
+		refresh["role"] = self.user.role
+		refresh["account_status"] = self.user.account_status
+		refresh["email"] = self.user.email
+		refresh["student_id"] = self.user.student_id
 
-        # Password should be hashed, not plaintext
-        self.assertNotEqual(user.password, password)
-        self.assertTrue(user.check_password(password))
+		self.client.force_authenticate(user=self.user)
 
-    def test_superadmin_requires_is_staff_and_is_superuser(self) -> None:
-        """Test that superadmin creation requires is_staff and is_superuser."""
-        user = User.objects.create_superuser(
-            email="admin@test.cm",
-            password="TestPass123!",
-        )
+		with patch("accounts.services.RefreshTokenBlacklistRepository.is_blacklisted", return_value=False), patch(
+			"accounts.services.RefreshTokenBlacklistRepository.add"
+		) as add_mock:
+			response = self.client.post(
+				"/api/v1/auth/logout/",
+				{"refresh": str(refresh)},
+				format="json",
+			)
 
-        self.assertTrue(user.is_staff)
-        self.assertTrue(user.is_superuser)
+		self.assertEqual(response.status_code, 204)
+		add_mock.assert_called_once()
 
-    def test_duplicate_email_allowed_at_creation(self) -> None:
-        """Test that duplicate emails can be created (DB will reject or unique constraint)."""
-        User.objects.create_user(
-            email="duplicate@sgep.cm",
-            password="TestPass123!",
-        )
+	def test_change_password_success(self):
+		self.client.force_authenticate(user=self.user)
 
-        # The second create_user might fail at DB level depending on constraints
-        # This test documents the current behavior
-        try:
-            User.objects.create_user(
-                email="duplicate@sgep.cm",
-                password="TestPass123!",
-            )
-            # If we get here, duplicates are allowed
-        except Exception:
-            # If we get an error, duplicates are not allowed
-            pass
+		with patch("accounts.services.UserRepository.get_by_id", return_value=self.user_payload), patch(
+			"accounts.services.UserRepository.update"
+		) as update_mock:
+			response = self.client.post(
+				"/api/v1/auth/change-password/",
+				{
+					"old_password": self.password,
+					"new_password": "NewSecurePass456!",
+					"confirm_password": "NewSecurePass456!",
+				},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 200)
+		update_mock.assert_called_once()
+
+	def test_change_password_invalid_old_password(self):
+		self.client.force_authenticate(user=self.user)
+
+		with patch("accounts.services.UserRepository.get_by_id", return_value=self.user_payload):
+			response = self.client.post(
+				"/api/v1/auth/change-password/",
+				{
+					"old_password": "wrong-password",
+					"new_password": "NewSecurePass456!",
+					"confirm_password": "NewSecurePass456!",
+				},
+				format="json",
+			)
+
+		self.assertEqual(response.status_code, 401)

@@ -16,6 +16,8 @@ export const ROLE_ROUTE_PREFIX: Record<UserRole, string> = {
 
 export const SESSION_COOKIE = "psms_session" as const;
 export const ROLE_COOKIE = "user_role" as const;
+export const DJANGO_ACCESS_COOKIE = "django_access_token" as const;
+export const DJANGO_REFRESH_COOKIE = "django_refresh_token" as const;
 
 export const TEAM_IDS: Record<UserRole, string> = {
   admin: process.env.NEXT_PUBLIC_APPWRITE_TEAM_ADMINS ?? "admins",

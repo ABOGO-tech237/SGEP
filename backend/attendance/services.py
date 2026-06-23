@@ -1,130 +1,135 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 
+from core.exceptions import NotFoundError
+from notifications.tasks import notify_parent_absence_task
 from students.repository import ReportJobRepository
 
-from attendance.repository import AttendanceRepository
-from attendance.tasks import (
-    export_attendance_excel_task,
-    export_attendance_pdf_task,
-    notify_parent_absence_task,
-)
+from .repository import TYPE_TO_STATUS, AttendanceRepository, STATUS_ABSENT_JUSTIFIE
 
 
 class AttendanceService:
-    @staticmethod
-    def list(
-        class_id: str | None = None,
-        student_id: str | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
-    ) -> dict:
-        response = AttendanceRepository.list(
-            class_id=class_id,
-            student_id=student_id,
-            date_from=date_from,
-            date_to=date_to,
-        )
-        return {"count": response.get("total", 0), "results": response.get("documents", [])}
+	@staticmethod
+	def _now() -> str:
+		return datetime.now(timezone.utc).isoformat()
 
-    @staticmethod
-    def record_absence(student_id: str, class_id: str, date: str, absence_type: str, motif: str | None) -> dict:
-        payload = {
-            "student_id": student_id,
-            "class_id": class_id,
-            "date": date,
-            "type": absence_type,
-            "motif": motif or "",
-            "is_justified": False,
-            "is_deleted": False,
-        }
-        record = AttendanceRepository.create(payload)
-        notify_parent_absence_task.delay(student_id, date, absence_type)
-        return record
+	@staticmethod
+	def _count_working_days(date_from: str, date_to: str) -> int:
+		start = datetime.fromisoformat(date_from.replace("Z", "+00:00")).date()
+		end = datetime.fromisoformat(date_to.replace("Z", "+00:00")).date()
+		count = 0
+		current = start
+		while current <= end:
+			if current.weekday() < 5:
+				count += 1
+			current += timedelta(days=1)
+		return max(count, 1)
 
-    @staticmethod
-    def update(record_id: str, validated_data: dict) -> dict:
-        return AttendanceRepository.update(record_id, validated_data)
+	@staticmethod
+	def list(
+		class_id: str | None = None,
+		student_id: str | None = None,
+		date_from: str | None = None,
+		date_to: str | None = None,
+	) -> list[dict]:
+		return AttendanceRepository.list(
+			class_id=class_id,
+			student_id=student_id,
+			date_from=date_from,
+			date_to=date_to,
+		)
 
-    @staticmethod
-    def justify(record_id: str, motif: str, justification_doc: str | None = None) -> dict:
-        payload = {
-            "is_justified": True,
-            "justification_motif": motif,
-        }
-        if justification_doc is not None:
-            payload["justification_doc"] = justification_doc
-        return AttendanceRepository.update(record_id, payload)
+	@staticmethod
+	def get(record_id: str) -> dict:
+		record = AttendanceRepository.get(record_id)
+		if not record:
+			raise NotFoundError(f"Enregistrement {record_id} introuvable.")
+		return record
 
-    @staticmethod
-    def get_stats(class_id: str, date_from: str, date_to: str) -> dict:
-        response = AttendanceRepository.list(class_id=class_id, date_from=date_from, date_to=date_to)
-        records = response.get("documents", [])
+	@staticmethod
+	def record_absence(
+		student_id: str,
+		class_id: str,
+		date_value: str,
+		absence_type: str,
+		motif: str,
+		recorded_by: str,
+		academic_year_id: str,
+	) -> dict:
+		status = TYPE_TO_STATUS.get(absence_type, absence_type.upper())
+		payload = {
+			"student_id": student_id,
+			"class_id": class_id,
+			"date": date_value,
+			"status": status,
+			"reason": motif,
+			"academic_year_id": academic_year_id,
+			"recorded_by": recorded_by,
+			"is_deleted": False,
+			"created_at": AttendanceService._now(),
+			"updated_at": AttendanceService._now(),
+		}
+		record = AttendanceRepository.create(payload)
+		notify_parent_absence_task.delay(student_id, date_value, absence_type)
+		return record
 
-        start = datetime.fromisoformat(date_from).date()
-        end = datetime.fromisoformat(date_to).date()
-        working_days = 0
-        cursor = start
-        while cursor <= end:
-            if cursor.weekday() < 5:
-                working_days += 1
-            cursor += timedelta(days=1)
+	@staticmethod
+	def update(record_id: str, validated_data: dict) -> dict:
+		AttendanceService.get(record_id)
+		payload = {"updated_at": AttendanceService._now()}
 
-        per_student: dict[str, dict] = {}
-        for r in records:
-            sid = r.get("student_id")
-            if not sid:
-                continue
-            item = per_student.setdefault(
-                sid,
-                {
-                    "student_id": sid,
-                    "absences": 0,
-                    "retards": 0,
-                    "justified_absences": 0,
-                    "absence_rate": 0.0,
-                },
-            )
-            if str(r.get("type", "absence")) == "retard":
-                item["retards"] += 1
-            else:
-                item["absences"] += 1
-                if bool(r.get("is_justified", False)):
-                    item["justified_absences"] += 1
+		if "type" in validated_data:
+			payload["status"] = TYPE_TO_STATUS.get(validated_data["type"], validated_data["type"].upper())
+		if "motif" in validated_data:
+			payload["reason"] = validated_data["motif"]
+		if "date" in validated_data:
+			payload["date"] = validated_data["date"]
+		if "class_id" in validated_data:
+			payload["class_id"] = validated_data["class_id"]
+		if "student_id" in validated_data:
+			payload["student_id"] = validated_data["student_id"]
+		if "academic_year_id" in validated_data:
+			payload["academic_year_id"] = validated_data["academic_year_id"]
 
-        for sid, item in per_student.items():
-            if working_days > 0:
-                item["absence_rate"] = round((item["absences"] / working_days) * 100, 2)
-            else:
-                item["absence_rate"] = 0.0
+		return AttendanceRepository.update(record_id, payload)
 
-        return {
-            "class_id": class_id,
-            "date_from": date_from,
-            "date_to": date_to,
-            "working_days": working_days,
-            "results": list(per_student.values()),
-        }
+	@staticmethod
+	def justify(record_id: str, motif: str) -> dict:
+		AttendanceService.get(record_id)
+		return AttendanceRepository.update(
+			record_id,
+			{
+				"status": STATUS_ABSENT_JUSTIFIE,
+				"reason": motif,
+				"updated_at": AttendanceService._now(),
+			},
+		)
 
-    @staticmethod
-    def export(class_id: str, date_from: str, date_to: str, export_format: str, requested_by: str) -> str:
-        job = ReportJobRepository.create(
-            {
-                "type": f"attendance_{export_format}",
-                "status": "pending",
-                "requested_by": requested_by,
-                "params": {
-                    "class_id": class_id,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                },
-            }
-        )
+	@staticmethod
+	def get_stats(class_id: str, date_from: str, date_to: str) -> list[dict]:
+		raw_stats = AttendanceRepository.get_stats(class_id, date_from, date_to)
+		working_days = AttendanceService._count_working_days(date_from, date_to)
 
-        if export_format == "excel":
-            export_attendance_excel_task.delay(job["id"], class_id, date_from, date_to)
-        else:
-            export_attendance_pdf_task.delay(job["id"], class_id, date_from, date_to)
+		for entry in raw_stats:
+			absences = entry.get("absences", 0)
+			entry["rate"] = round((absences / working_days) * 100, 2)
 
-        return job["id"]
+		return raw_stats
+
+	@staticmethod
+	def create_export_job(export_format: str, requested_by: str, params: dict | None = None) -> dict:
+		return ReportJobRepository.create(
+			{
+				"type": f"attendance_{export_format}",
+				"status": "pending",
+				"requested_by": requested_by,
+				"file_path": "",
+				"error": "",
+				"params": json.dumps(params or {}, ensure_ascii=True),
+				"is_deleted": False,
+				"created_at": AttendanceService._now(),
+				"updated_at": AttendanceService._now(),
+			}
+		)

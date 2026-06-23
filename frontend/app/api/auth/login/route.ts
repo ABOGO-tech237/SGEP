@@ -1,14 +1,24 @@
 import { cookies } from "next/headers";
 import { decodeJwt } from "jose";
-import { TEAM_IDS, USER_ROLES } from "@/lib/auth/constants";
+
+import {
+  DJANGO_ACCESS_COOKIE,
+  DJANGO_REFRESH_COOKIE,
+  TEAM_IDS,
+  USER_ROLES,
+} from "@/lib/auth/constants";
+import {
+  DjangoAuthError,
+  loginWithDjango,
+} from "@/lib/server/django-auth";
 import { LoginSchema } from "@/lib/types/auth";
 import type { LoginApiResponse, LoginApiRole } from "@/lib/types/auth";
 
-const SESSION_COOKIE = "psms_session";
 const CSRF_COOKIE = "psms_csrf";
-const SESSION_MAX_AGE = 30 * 60; // 30 minutes
+const DEFAULT_SESSION_MAX_AGE = 30 * 60;
+const DJANGO_REFRESH_MAX_AGE = 7 * 24 * 60 * 60;
 
-function normalizeRole(role: string): LoginApiRole {
+function normalizeRole(role: string | undefined): LoginApiRole {
   if (role === "superadmin" || role === "comptable") {
     return USER_ROLES.ADMIN;
   }
@@ -33,67 +43,53 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const apiUrl = process.env.DJANGO_API_URL;
-  if (!apiUrl) {
-    return Response.json({ error: "Service unavailable." }, { status: 503 });
-  }
-
-  let djangoRes: Response;
+  let djangoTokens;
   try {
-    djangoRes = await fetch(`${apiUrl}/api/v1/auth/login/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
-    });
-  } catch {
+    djangoTokens = await loginWithDjango(
+      parsed.data.email,
+      parsed.data.password,
+    );
+  } catch (error) {
+    if (error instanceof DjangoAuthError) {
+      if (error.code === "NOT_CONFIGURED") {
+        return Response.json({ error: "Service unavailable." }, { status: 503 });
+      }
+      return Response.json(
+        { error: "Invalid email or password." },
+        { status: 401 },
+      );
+    }
     return Response.json({ error: "Service unavailable." }, { status: 503 });
   }
 
-  if (!djangoRes.ok) {
-    return Response.json(
-      { error: "Invalid email or password." },
-      { status: 401 },
-    );
-  }
-
-  const djangoData = (await djangoRes.json()) as {
-    access_token?: string;
-    refresh_token?: string;
-    access?: string;
-    refresh?: string;
-  };
-
-  const accessToken = djangoData.access_token ?? djangoData.access;
-  const refreshToken = djangoData.refresh_token ?? djangoData.refresh;
-  if (!accessToken || !refreshToken) {
-    return Response.json(
-      { error: "Service unavailable." },
-      { status: 502 },
-    );
-  }
-
-  const jwtPayload = decodeJwt(accessToken) as {
+  const claims = decodeJwt(djangoTokens.accessToken) as {
     role?: string;
     email?: string;
-    account_status?: string;
-    student_id?: string | null;
     user_id?: string;
     sub?: string;
   };
 
-  const role = normalizeRole(jwtPayload.role ?? USER_ROLES.ADMIN);
-  const email = jwtPayload.email ?? "";
-  const userId = jwtPayload.user_id ?? jwtPayload.sub ?? "";
+  const role = normalizeRole(claims.role);
+  const email = claims.email ?? parsed.data.email;
+  const userId = claims.user_id ?? claims.sub ?? "";
   const name = email || userId || "User";
 
   const cookieStore = await cookies();
   const isProd = process.env.NODE_ENV === "production";
 
-  cookieStore.set(SESSION_COOKIE, accessToken, {
+  cookieStore.set(DJANGO_ACCESS_COOKIE, djangoTokens.accessToken, {
     httpOnly: true,
     secure: isProd,
     sameSite: "strict",
-    maxAge: SESSION_MAX_AGE,
+    maxAge: DEFAULT_SESSION_MAX_AGE,
+    path: "/",
+  });
+
+  cookieStore.set(DJANGO_REFRESH_COOKIE, djangoTokens.refreshToken, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: "strict",
+    maxAge: DJANGO_REFRESH_MAX_AGE,
     path: "/",
   });
 
@@ -101,7 +97,7 @@ export async function POST(request: Request): Promise<Response> {
     httpOnly: false,
     secure: isProd,
     sameSite: "strict",
-    maxAge: SESSION_MAX_AGE,
+    maxAge: DEFAULT_SESSION_MAX_AGE,
     path: "/",
   });
 
@@ -109,8 +105,8 @@ export async function POST(request: Request): Promise<Response> {
     role,
     user: {
       id: userId,
-      email,
       name,
+      email,
       role,
       teamId: TEAM_IDS[role],
     },

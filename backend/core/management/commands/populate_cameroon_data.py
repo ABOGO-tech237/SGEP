@@ -28,7 +28,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Execute the population command."""
-        self.stdout.write(self.style.SUCCESS("🇨🇲 Populating Cameroon-specific data..."))
+        self.stdout.write(self.style.SUCCESS(" Populating Cameroon-specific data..."))
         
         # Populate levels (SIL, CP, CE1, etc.)
         self._populate_levels()

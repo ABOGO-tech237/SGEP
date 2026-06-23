@@ -1,25 +1,21 @@
 from django.urls import path
 
-from students.views import (
+from .views import (
     StudentDetailView,
     StudentEnrollView,
     StudentExportExcelView,
-    StudentExportPdfView,
+    StudentExportPDFView,
     StudentHistoryView,
-    StudentListView,
+    StudentListCreateView,
     StudentPromoteView,
-    StudentSwaggerView,
-    StudentSwaggerUIView,
 )
 
 urlpatterns = [
-    path("students/", StudentListView.as_view(), name="student-list"),
-    path("students/export/pdf/", StudentExportPdfView.as_view(), name="student-export-pdf"),
-    path("students/export/excel/", StudentExportExcelView.as_view(), name="student-export-excel"),
-    path("students/swagger/", StudentSwaggerView.as_view(), name="student-swagger"),
-    path("students/swagger/ui/", StudentSwaggerUIView.as_view(), name="student-swagger-ui"),
-    path("students/<str:student_id>/", StudentDetailView.as_view(), name="student-detail"),
-    path("students/<str:student_id>/history/", StudentHistoryView.as_view(), name="student-history"),
-    path("students/<str:student_id>/enroll/", StudentEnrollView.as_view(), name="student-enroll"),
-    path("students/<str:student_id>/promote/", StudentPromoteView.as_view(), name="student-promote"),
+    path("students/", StudentListCreateView.as_view(), name="students-list"),
+    path("students/export/pdf/", StudentExportPDFView.as_view(), name="students-export-pdf"),
+    path("students/export/excel/", StudentExportExcelView.as_view(), name="students-export-excel"),
+    path("students/<str:pk>/history/", StudentHistoryView.as_view(), name="students-history"),
+    path("students/<str:pk>/enroll/", StudentEnrollView.as_view(), name="students-enroll"),
+    path("students/<str:pk>/promote/", StudentPromoteView.as_view(), name="students-promote"),
+    path("students/<str:pk>/", StudentDetailView.as_view(), name="students-detail"),
 ]

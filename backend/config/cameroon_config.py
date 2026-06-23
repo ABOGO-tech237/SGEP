@@ -29,6 +29,9 @@ CAMEROON_PRIMARY_LEVELS = {
 # TYPES DE FRAIS (Cameroun)
 CAMEROON_FEE_TYPES = {
     "INSCRIPTION": {"code": "INSC", "name": "Frais d'inscription"},
+    "TRANCHE_1": {"code": "TR1", "name": "1ère tranche"},
+    "TRANCHE_2": {"code": "TR2", "name": "2ème tranche"},
+    "TRANCHE_3": {"code": "TR3", "name": "3ème tranche"},
     "SCOLARITE": {"code": "SCOL", "name": "Frais de scolarité"},
     "CANTINE": {"code": "CANT", "name": "Frais de cantine"},
     "UNIFORME": {"code": "UNIF", "name": "Uniforme scolaire"},
