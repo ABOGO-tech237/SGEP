@@ -7,3 +7,6 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from core import checks  # noqa: F401
+        from core.appwrite_utils import install_appwrite_get_body_shim
+
+        install_appwrite_get_body_shim()
