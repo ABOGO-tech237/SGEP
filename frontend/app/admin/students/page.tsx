@@ -19,10 +19,15 @@ export default async function StudentsPage() {
   try {
     data = await fetchStudents();
   } catch (err) {
-    fetchError =
-      err instanceof DjangoApiError
-        ? err.message
-        : "Could not load students.";
+    if (err instanceof DjangoApiError) {
+      fetchError =
+        err.status === 401
+          ? "Session expired — sign out and sign in again to refresh your credentials."
+          : err.message;
+    } else {
+      fetchError =
+        err instanceof Error ? err.message : "Could not load students.";
+    }
   }
 
   const students = data?.items ?? [];
