@@ -67,11 +67,18 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
     setServerError(null);
     try {
       const user = await login(data.email, data.password);
-      await fetch("/api/auth/role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: user.role }),
-      });
+      await Promise.all([
+        fetch("/api/auth/role", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: user.role }),
+        }),
+        fetch("/api/auth/django", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: data.email, password: data.password }),
+        }),
+      ]);
       setUser(user);
       queryClient.clear();
       router.replace(ROLE_ROUTE_PREFIX[user.role]);
