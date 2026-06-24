@@ -26,25 +26,39 @@ interface StudentsTableProps {
 
 export function StudentsTable({ students }: StudentsTableProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [deleteTarget, setDeleteTarget] = useState<StudentListItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete() {
     if (!deleteTarget) return;
+    setIsDeleting(true);
     setDeleteError(null);
 
-    const res = await fetch(`/api/students/${deleteTarget.id}`, {
-      method: "DELETE",
-    });
+    try {
+      const res = await fetch(`/api/students/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
 
-    if (!res.ok) {
-      setDeleteError("Could not delete student. Please try again.");
-      return;
+      if (!res.ok) {
+        const body: unknown = await res.json().catch(() => ({}));
+        const b = body as Record<string, unknown>;
+        const msg =
+          typeof b.detail === "string" ? b.detail :
+          typeof b.error === "string" ? b.error :
+          typeof b.message === "string" ? b.message :
+          "Could not delete student. Please try again.";
+        setDeleteError(msg);
+        return;
+      }
+
+      setDeleteTarget(null);
+      setDeleteError(null);
+      startTransition(() => router.refresh());
+    } finally {
+      setIsDeleting(false);
     }
-
-    setDeleteTarget(null);
-    startTransition(() => router.refresh());
   }
 
   const columns: ColumnDef<StudentListItem>[] = [
@@ -75,16 +89,14 @@ export function StudentsTable({ students }: StudentsTableProps) {
           <button
             aria-label="Edit student"
             className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            onClick={() =>
-              router.push(`/admin/students/${row.original.id}`)
-            }
+            onClick={() => router.push(`/admin/students/${row.original.id}`)}
           >
             <Pencil className="size-3.5" />
           </button>
           <button
             aria-label="Delete student"
             className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-            onClick={() => setDeleteTarget(row.original)}
+            onClick={() => { setDeleteError(null); setDeleteTarget(row.original); }}
           >
             <Trash2 className="size-3.5" />
           </button>
@@ -101,34 +113,29 @@ export function StudentsTable({ students }: StudentsTableProps) {
         columns={columns}
         filterPlaceholder="Search students…"
         exportFilename="students.csv"
-        className={isPending ? "opacity-60 pointer-events-none" : ""}
       />
 
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !isDeleting) {
             setDeleteTarget(null);
             setDeleteError(null);
           }
         }}
         title="Remove student"
         description={
-          deleteTarget
-            ? `Remove ${deleteTarget.first_name} ${deleteTarget.last_name} (${deleteTarget.matricule})? This action can be undone by an administrator.`
-            : ""
+          deleteError
+            ? deleteError
+            : deleteTarget
+              ? `Remove ${deleteTarget.first_name} ${deleteTarget.last_name} (${deleteTarget.matricule})?`
+              : ""
         }
         confirmLabel="Remove"
         isDestructive
-        isLoading={isPending}
+        isLoading={isDeleting}
         onConfirm={handleDelete}
       />
-
-      {deleteError && (
-        <p role="alert" className="text-sm text-destructive">
-          {deleteError}
-        </p>
-      )}
     </>
   );
 }

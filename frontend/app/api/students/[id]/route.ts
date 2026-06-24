@@ -3,11 +3,18 @@ import { djangoFetch, DjangoApiError } from "@/lib/server/django-fetch";
 
 type Params = { params: Promise<{ id: string }> };
 
+async function readBody(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 export async function GET(_request: NextRequest, { params }: Params): Promise<Response> {
   try {
     const { id } = await params;
     const res = await djangoFetch(`/api/v1/students/${id}/`);
-    const data: unknown = await res.json();
+    const data = await readBody(res);
+    if (data === null) return new Response(null, { status: res.status });
     return Response.json(data, { status: res.status });
   } catch (err) {
     if (err instanceof DjangoApiError) {
@@ -25,7 +32,8 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<R
       method: "PATCH",
       body: JSON.stringify(body),
     });
-    const data: unknown = await res.json();
+    const data = await readBody(res);
+    if (data === null) return new Response(null, { status: res.status });
     return Response.json(data, { status: res.status });
   } catch (err) {
     if (err instanceof DjangoApiError) {
@@ -41,7 +49,9 @@ export async function DELETE(_request: NextRequest, { params }: Params): Promise
     const res = await djangoFetch(`/api/v1/students/${id}/`, {
       method: "DELETE",
     });
-    return new Response(null, { status: res.status });
+    const data = await readBody(res);
+    if (data === null) return new Response(null, { status: res.status });
+    return Response.json(data, { status: res.status });
   } catch (err) {
     if (err instanceof DjangoApiError) {
       return Response.json({ error: err.message }, { status: err.status });

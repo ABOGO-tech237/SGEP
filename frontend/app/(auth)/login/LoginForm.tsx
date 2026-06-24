@@ -76,13 +76,17 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
         const body = await roleRes.json().catch(() => ({}));
         throw new Error((body as { error?: string }).error ?? "Session setup failed. Please try again.");
       }
-      // Fetch Django token in the background — doesn't block navigation.
-      // Backend may be sleeping (Render free tier); the token will be ready after wake-up.
-      fetch("/api/auth/django", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      }).catch(() => {});
+      // Wait up to 5 s for the Django token cookie to be set before navigating.
+      // If the backend is cold-starting (Render free tier) we proceed anyway and
+      // the Students page will show the "Try again" banner instead of blocking login.
+      await Promise.race([
+        fetch("/api/auth/django", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: data.email, password: data.password }),
+        }).catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ]);
       setUser(user);
       queryClient.clear();
       router.replace(ROLE_ROUTE_PREFIX[user.role]);

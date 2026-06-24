@@ -40,7 +40,6 @@ export type StudentsListResponse = z.infer<typeof StudentsListResponseSchema>;
 export const CreateStudentSchema = z.object({
   first_name: z.string().min(1, "Required"),
   last_name: z.string().min(1, "Required"),
-  matricule: z.string().min(1, "Required"),
   birth_date: z.string().min(1, "Required"),
   birth_place: z.string().min(1, "Required"),
   gender: z.enum(["M", "F"]),
@@ -50,3 +49,17 @@ export const CreateStudentSchema = z.object({
 });
 
 export type CreateStudentFormValues = z.infer<typeof CreateStudentSchema>;
+
+export const UpdateStudentSchema = z.object({
+  first_name: z.string().min(1, "Required"),
+  last_name: z.string().min(1, "Required"),
+  birth_date: z.string().min(1, "Required"),
+  birth_place: z.string().min(1, "Required"),
+  gender: z.enum(["M", "F"]),
+  class_id: z.string().min(1, "Required"),
+  academic_year_id: z.string().min(1, "Required"),
+  id_number: z.string().optional(),
+  is_active: z.boolean().optional(),
+});
+
+export type UpdateStudentFormValues = z.infer<typeof UpdateStudentSchema>;
