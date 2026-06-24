@@ -7,7 +7,8 @@ const BodySchema = z.object({
   password: z.string().min(1),
 });
 
-const JWT_MAX_AGE = 900; // 15 min — matches Django JWT_ACCESS_TOKEN_LIFETIME
+const COOKIE_MAX_AGE = 43200; // 12 hours
+const UPSTREAM_TIMEOUT_MS = 30_000;
 
 export async function POST(request: Request): Promise<Response> {
   const body: unknown = await request.json().catch(() => null);
@@ -21,15 +22,24 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Server misconfigured." }, { status: 500 });
   }
 
-  const upstream = await fetch(`${apiUrl}/api/v1/auth/login/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: parsed.data.email,
-      password: parsed.data.password,
-    }),
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${apiUrl}/api/v1/auth/login/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: parsed.data.email,
+        password: parsed.data.password,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch {
+    return Response.json(
+      { error: "Could not reach the backend. Please try again in a moment." },
+      { status: 503 },
+    );
+  }
 
   if (!upstream.ok) {
     const detail = await upstream.json().catch(() => ({}));
@@ -47,7 +57,7 @@ export async function POST(request: Request): Promise<Response> {
     httpOnly: true,
     secure: isProd,
     sameSite: "strict",
-    maxAge: JWT_MAX_AGE,
+    maxAge: COOKIE_MAX_AGE,
     path: "/",
   });
 
@@ -56,6 +66,6 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function DELETE(): Promise<Response> {
   const cookieStore = await cookies();
-  cookieStore.delete(DJANGO_TOKEN_COOKIE);
+  cookieStore.set(DJANGO_TOKEN_COOKIE, "", { maxAge: 0, path: "/" });
   return new Response(null, { status: 204 });
 }

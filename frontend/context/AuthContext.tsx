@@ -36,10 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function handleLogout() {
     await appwriteLogout();
-    await Promise.all([
-      fetch("/api/auth/role", { method: "DELETE" }),
-      fetch("/api/auth/django", { method: "DELETE" }),
-    ]);
+    await fetch("/api/auth/role", { method: "DELETE" });
     setUser(null);
   }
 

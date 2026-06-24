@@ -21,7 +21,7 @@ export async function djangoFetch(
 
   const cookieStore = await cookies();
   const token = cookieStore.get(DJANGO_TOKEN_COOKIE)?.value;
-  if (!token) throw new DjangoApiError(401, "Not authenticated");
+  if (!token) throw new DjangoApiError(503, "Backend session not ready — please wait a moment and refresh the page.");
 
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,

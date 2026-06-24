@@ -67,18 +67,22 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
     setServerError(null);
     try {
       const user = await login(data.email, data.password);
-      await Promise.all([
-        fetch("/api/auth/role", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: user.role }),
-        }),
-        fetch("/api/auth/django", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: data.email, password: data.password }),
-        }),
-      ]);
+      const roleRes = await fetch("/api/auth/role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: user.role }),
+      });
+      if (!roleRes.ok) {
+        const body = await roleRes.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? "Session setup failed. Please try again.");
+      }
+      // Fetch Django token in the background — doesn't block navigation.
+      // Backend may be sleeping (Render free tier); the token will be ready after wake-up.
+      fetch("/api/auth/django", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email, password: data.password }),
+      }).catch(() => {});
       setUser(user);
       queryClient.clear();
       router.replace(ROLE_ROUTE_PREFIX[user.role]);

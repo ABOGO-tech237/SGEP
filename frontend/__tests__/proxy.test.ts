@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
 import { SignJWT } from "jose";
 import { proxy } from "../proxy";
-import { SESSION_COOKIE } from "../lib/auth/constants";
+import { PROXY_SESSION_COOKIE } from "../lib/auth/constants";
 
 const BASE_URL = "http://localhost:3000";
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
@@ -17,7 +17,7 @@ async function makeJwt(role: string): Promise<string> {
 
 function request(path: string, cookie?: string): NextRequest {
   const req = new NextRequest(`${BASE_URL}${path}`);
-  if (cookie) req.cookies.set(SESSION_COOKIE, cookie);
+  if (cookie) req.cookies.set(PROXY_SESSION_COOKIE, cookie);
   return req;
 }
 
@@ -129,7 +129,7 @@ describe("proxy — invalid token", () => {
     const res = await proxy(request("/admin/students", "invalid.jwt.token"));
     expect(res.status).toBe(307);
     const setCookie = res.headers.get("set-cookie");
-    expect(setCookie).toContain(SESSION_COOKIE);
+    expect(setCookie).toContain(PROXY_SESSION_COOKIE);
     // Cookie cleared when session is expired: Expires set to epoch or Max-Age=0
     expect(setCookie).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
   });

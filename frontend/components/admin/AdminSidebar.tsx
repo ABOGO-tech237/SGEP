@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   GraduationCap,
   BookOpen,
@@ -12,6 +13,7 @@ import {
   Bell,
   LogOut,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
@@ -24,6 +26,19 @@ const navItems = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await logout();
+      router.replace("/login");
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   return (
     <aside className="w-60 flex flex-col border-r border-border bg-card shrink-0">
@@ -63,9 +78,13 @@ export function AdminSidebar() {
             3
           </span>
         </button>
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        >
           <LogOut className="size-4 shrink-0" />
-          Sign out
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </div>
     </aside>

@@ -3,6 +3,7 @@ import { djangoFetch, DjangoApiError } from "@/lib/server/django-fetch";
 import type { StudentsListResponse } from "@/lib/types/students";
 import { StudentsTable } from "./StudentsTable";
 import { EnrolStudentButton } from "./EnrolStudentButton";
+import { RetryButton } from "./RetryButton";
 
 async function fetchStudents(): Promise<StudentsListResponse> {
   const res = await djangoFetch("/api/v1/students/?page_size=100");
@@ -14,7 +15,7 @@ async function fetchStudents(): Promise<StudentsListResponse> {
 
 export default async function StudentsPage() {
   let data: StudentsListResponse | null = null;
-  let fetchError: string | null = null;
+  let fetchError: { message: string; retryable: boolean } | null = null;
 
   try {
     data = await fetchStudents();
@@ -22,11 +23,13 @@ export default async function StudentsPage() {
     if (err instanceof DjangoApiError) {
       fetchError =
         err.status === 401
-          ? "Session expired — sign out and sign in again to refresh your credentials."
-          : err.message;
+          ? { message: "Session expired — sign out and sign in again to refresh your credentials.", retryable: false }
+          : { message: "The backend is still starting up. This usually takes under a minute on first load.", retryable: true };
     } else {
-      fetchError =
-        err instanceof Error ? err.message : "Could not load students.";
+      fetchError = {
+        message: err instanceof Error ? err.message : "Could not load students.",
+        retryable: false,
+      };
     }
   }
 
@@ -60,9 +63,14 @@ export default async function StudentsPage() {
         {fetchError ? (
           <div
             role="alert"
-            className="rounded-xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive"
+            className={`rounded-xl border px-5 py-4 text-sm flex items-start justify-between gap-4 ${
+              fetchError.retryable
+                ? "border-amber-400/40 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                : "border-destructive/40 bg-destructive/10 text-destructive"
+            }`}
           >
-            {fetchError}
+            <span>{fetchError.message}</span>
+            {fetchError.retryable && <RetryButton />}
           </div>
         ) : students.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center gap-3">

@@ -18,6 +18,8 @@ export const SESSION_COOKIE =
   `a_session_${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID}` as const;
 export const ROLE_COOKIE = "user_role" as const;
 export const DJANGO_TOKEN_COOKIE = "django_access_token" as const;
+/** Proxy session: our own HS256 JWT (signed with JWT_SECRET) that the Edge middleware verifies. */
+export const PROXY_SESSION_COOKIE = "psms_session" as const;
 
 export const TEAM_IDS: Record<UserRole, string> = {
   admin: process.env.NEXT_PUBLIC_APPWRITE_TEAM_ADMINS ?? "admins",

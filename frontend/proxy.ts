@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
-import { SESSION_COOKIE } from "@/lib/auth/constants";
+import { PROXY_SESSION_COOKIE } from "@/lib/auth/constants";
 
 const LOGIN_URL = "/login";
 
@@ -11,7 +11,7 @@ const JWT_ROLE_ROUTES: Record<string, string> = {
   SUPER_ADMIN: "/admin",
   ADMIN: "/admin",
   TEACHER: "/teacher",
-  STUDENT: "/student",
+  STUDENT: "/students",
   PARENT: "/parent",
   ACCOUNTANT: "/accountant",
 };
@@ -68,7 +68,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const token = request.cookies.get(PROXY_SESSION_COOKIE)?.value;
 
   if (!token) {
     return NextResponse.redirect(new URL(LOGIN_URL, request.url));
@@ -86,7 +86,7 @@ export async function proxy(request: NextRequest) {
 
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-nonce", nonce);
-    requestHeaders.set("x-user-role", role);
+    requestHeaders.set("x-user-role", role!);
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     applySecurityHeaders(response, nonce);
     return response;
@@ -94,7 +94,7 @@ export async function proxy(request: NextRequest) {
     // JWT is invalid or expired — clear the session cookie and force re-login
     const response = NextResponse.redirect(new URL(LOGIN_URL, request.url));
     response.cookies.set({
-      name: SESSION_COOKIE,
+      name: PROXY_SESSION_COOKIE,
       value: "",
       expires: new Date(0),
       path: "/",
