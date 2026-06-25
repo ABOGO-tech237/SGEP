@@ -111,7 +111,6 @@ export function DatePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-describedby={describedBy}
-        aria-invalid={ariaInvalid}
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "w-full flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors",
@@ -128,7 +127,7 @@ export function DatePicker({
         <div
           role="dialog"
           aria-label="Date picker"
-          className="absolute left-0 top-full mt-2 z-[60] w-72 rounded-xl border border-border bg-card shadow-2xl"
+          className="absolute left-0 top-full mt-2 z-60 w-72 rounded-xl border border-border bg-card shadow-2xl"
         >
           {/* Month / year nav */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-border">

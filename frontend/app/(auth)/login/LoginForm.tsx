@@ -51,16 +51,21 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [password, setPassword] = useState("");
+
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(LoginSchema),
   });
 
-  const password = watch("password", "");
+  const passwordRegister = register("password", {
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+      setPassword(e.target.value),
+  });
+
   const strength = getPasswordStrength(password);
 
   async function onSubmit(data: LoginFormValues) {
@@ -74,7 +79,10 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
       });
       if (!roleRes.ok) {
         const body = await roleRes.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? "Session setup failed. Please try again.");
+        throw new Error(
+          (body as { error?: string }).error ??
+            "Session setup failed. Please try again.",
+        );
       }
       // Wait up to 5 s for the Django token cookie to be set before navigating.
       // If the backend is cold-starting (Render free tier) we proceed anyway and
@@ -169,7 +177,7 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
             }
             aria-invalid={!!errors.password}
             className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
-            {...register("password")}
+            {...passwordRegister}
           />
           <button
             type="button"
