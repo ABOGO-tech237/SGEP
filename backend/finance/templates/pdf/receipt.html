@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><title>Reçu de paiement</title></head>
+<body>
+	<h2>Reçu de paiement SGEP</h2>
+	<p><strong>Montant :</strong> {{ payment.amount }} FCFA</p>
+	<p><strong>Méthode :</strong> {{ payment.method }}</p>
+	<p><strong>Référence :</strong> {{ payment.reference }}</p>
+	{% if invoice %}<p><strong>Facture :</strong> {{ invoice.number }}</p>{% endif %}
+</body>
+</html>

@@ -54,6 +54,7 @@ export function DataTable<TData>({
   exportFilename = "export.csv",
   className,
 }: DataTableProps<TData>) {
+  "use no memo";
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
 

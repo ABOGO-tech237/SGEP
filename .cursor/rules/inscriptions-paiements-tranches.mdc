@@ -1,0 +1,36 @@
+---
+description: Logique métier SGEP — année scolaire, inscriptions, comptes parents, tranches de paiement et notifications
+alwaysApply: true
+---
+
+# Inscriptions, paiements et tranches (SGEP)
+
+## Activation de l'année scolaire
+
+En août, l'admin (ex. Sophia) va dans **Paramètres → Années scolaires** (`academic_years`), sélectionne la prochaine année et met à jour la date de début (`start_date`) / active l'année (`is_active: true`). Cela ouvre la **période d'inscription** : les parents peuvent alors inscrire ou réinscrire leurs élèves (`StudentService.enroll`, `academic_year_id`).
+
+## Comptes parents
+
+- **Nouveau parent** : création via `ParentAccountService.create_from_student` ; un compte peut être lié à un ou plusieurs élèves (`student_id`, collection `parent_student`).
+- **Parent existant** : réactivation automatique à la réinscription (`ParentAccountService.reactivate`, `account_status: active`).
+- **Sans inscription active** : suspension (`account_status: suspended`) si l'élève n'est pas inscrit sur l'année active (`suspend_inactive_parents_task`).
+
+## Tranches de paiement (frais scolaires)
+
+Codes `fee_type` : **`INSC`** (inscription), **`TR1`** / **`TR2`** / **`TR3`** (1ʳᵉ, 2ᵉ, 3ᵉ tranche). Chaque tranche = un `fee_type` avec montant + période (`due_date` sur la `invoice`).
+
+**À l'inscription** (`StudentService.enroll`) : création automatique **uniquement** de la facture `INSC` pour l'année scolaire (si absente). Les tranches `TR1`/`TR2`/`TR3` sont générées plus tard par l'admin (`InvoiceService.generate_for_class` / `generate_bulk`), pas à l'inscription.
+
+| Tranche | Exemple période | Échéance |
+|---------|-----------------|----------|
+| Inscriptions | août – oct. | fin octobre |
+| 1ʳᵉ tranche | oct. – nov. | fin novembre |
+| 2ᵉ tranche | fév. | fin février |
+
+L'admin fixe montants et périodes. Tout doit être soldé avant la fin de chaque période (`invoice.status: pending` → `paid` via `PaymentService.record`).
+
+## Notifications de paiement
+
+- Notifier (email + message in-app) **uniquement** les parents **non conformes** (tranche impayée après échéance ou à l'approche).
+- Le parent peut indiquer une **date de paiement prévue** : aucune relance **avant** cette date ; les rappels démarrent à partir de celle-ci.
+- Exemple : échéance 31/10, date prévue 15/10 → silence jusqu'au 15/10 ; si toujours impayé après, relances jusqu'au règlement.

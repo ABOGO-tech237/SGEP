@@ -1,14 +1,23 @@
 from django.urls import path
 
-from grades import views
+from .views import (
+	GradeBulkCreateView,
+	GradeDetailView,
+	GradeListCreateView,
+	GradeResultsExportView,
+	ReportCardDownloadView,
+	ReportCardGenerateView,
+	ReportCardPublishView,
+	ReportCardStatusView,
+)
 
 urlpatterns = [
-    path("", views.GradesListCreateView.as_view(), name="grades-list-create"),
-    path("bulk/", views.GradesBulkCreateView.as_view(), name="grades-bulk-create"),
-    path("averages/", views.GradeAveragesView.as_view(), name="grades-averages"),
-    path("<str:grade_id>/", views.GradeDetailView.as_view(), name="grade-detail"),
-    path("report-cards/generate/", views.ReportCardGenerateView.as_view(), name="reportcards-generate"),
-    path("report-cards/<str:job_id>/status/", views.ReportCardStatusView.as_view(), name="reportcards-status"),
-    path("report-cards/<str:card_id>/download/", views.ReportCardDownloadView.as_view(), name="reportcards-download"),
-    path("report-cards/<str:card_id>/publish/", views.ReportCardPublishView.as_view(), name="reportcards-publish"),
+	path("grades/", GradeListCreateView.as_view(), name="grades-list"),
+	path("grades/bulk/", GradeBulkCreateView.as_view(), name="grades-bulk"),
+	path("grades/<str:pk>/", GradeDetailView.as_view(), name="grades-detail"),
+	path("grades/export/results/", GradeResultsExportView.as_view(), name="grades-export-results"),
+	path("report-cards/generate/", ReportCardGenerateView.as_view(), name="report-cards-generate"),
+	path("report-cards/<str:pk>/status/", ReportCardStatusView.as_view(), name="report-cards-status"),
+	path("report-cards/<str:pk>/download/", ReportCardDownloadView.as_view(), name="report-cards-download"),
+	path("report-cards/<str:pk>/publish/", ReportCardPublishView.as_view(), name="report-cards-publish"),
 ]

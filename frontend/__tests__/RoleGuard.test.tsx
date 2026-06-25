@@ -11,15 +11,17 @@ function setStoreUser(user: SessionUser | null) {
 const adminUser: SessionUser = {
   id: "1",
   email: "admin@school.cm",
-  role: "SUPER_ADMIN",
+  role: "admin",
   name: "Admin",
+  teamId: "admins",
 };
 
 const parentUser: SessionUser = {
   id: "2",
   email: "parent@school.cm",
-  role: "PARENT",
+  role: "parent",
   name: "Parent",
+  teamId: "parents",
 };
 
 beforeEach(() => {
@@ -30,7 +32,7 @@ describe("RoleGuard", () => {
   it("renders children when user role is in allowedRoles", () => {
     setStoreUser(adminUser);
     render(
-      <RoleGuard allowedRoles={["SUPER_ADMIN"]}>
+      <RoleGuard allowedRoles={["admin"]}>
         <span>Admin content</span>
       </RoleGuard>
     );
@@ -40,7 +42,7 @@ describe("RoleGuard", () => {
   it("hides children when user role is not in allowedRoles", () => {
     setStoreUser(parentUser);
     render(
-      <RoleGuard allowedRoles={["SUPER_ADMIN"]}>
+      <RoleGuard allowedRoles={["admin"]}>
         <span>Admin content</span>
       </RoleGuard>
     );
@@ -50,7 +52,7 @@ describe("RoleGuard", () => {
   it("hides children when user is null", () => {
     setStoreUser(null);
     render(
-      <RoleGuard allowedRoles={["SUPER_ADMIN"]}>
+      <RoleGuard allowedRoles={["admin"]}>
         <span>Protected</span>
       </RoleGuard>
     );
@@ -60,7 +62,7 @@ describe("RoleGuard", () => {
   it("renders fallback when role is not allowed", () => {
     setStoreUser(parentUser);
     render(
-      <RoleGuard allowedRoles={["SUPER_ADMIN"]} fallback={<span>No access</span>}>
+      <RoleGuard allowedRoles={["admin"]} fallback={<span>No access</span>}>
         <span>Admin only</span>
       </RoleGuard>
     );
@@ -71,7 +73,7 @@ describe("RoleGuard", () => {
   it("supports multiple allowed roles", () => {
     setStoreUser(parentUser);
     render(
-      <RoleGuard allowedRoles={["SUPER_ADMIN", "PARENT"]}>
+      <RoleGuard allowedRoles={["admin", "parent"]}>
         <span>Shared content</span>
       </RoleGuard>
     );

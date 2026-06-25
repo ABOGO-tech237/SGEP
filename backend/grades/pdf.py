@@ -1,68 +1,69 @@
 from __future__ import annotations
 
-import tempfile
+import os
 from pathlib import Path
-from typing import List
 
-from weasyprint import HTML
+from django.template.loader import render_to_string
 
-
-def _appreciation_for(value: float) -> str:
-    if value >= 16:
-        return "Très bien"
-    if value >= 14:
-        return "Bien"
-    if value >= 12:
-        return "Assez bien"
-    if value >= 10:
-        return "Passable"
-    return "Insuffisant"
+BULLETINS_DIR = Path("/srv/sgep/media/bulletins")
 
 
-def generate_report_card_pdf(student: dict, grades: List[dict], period: str, school: dict) -> str:
-    """Generate a report card PDF and return the file path."""
-    template_path = Path(__file__).resolve().parent / "templates" / "pdf" / "report_card.html"
-    html_template = template_path.read_text(encoding="utf-8")
+def _appreciation(value: float) -> str:
+	if value >= 16:
+		return "Excellent"
+	if value >= 14:
+		return "Très bien"
+	if value >= 12:
+		return "Bien"
+	if value >= 10:
+		return "Assez bien"
+	if value >= 8:
+		return "Passable"
+	return "Insuffisant"
 
-    # Build grades rows
-    rows = []
-    total_weighted = 0.0
-    total_coeff = 0.0
-    for g in grades:
-        subject = g.get("subject_name") or g.get("subject_id")
-        value = g.get("value") or 0.0
-        coeff = g.get("coefficient") or 1.0
-        try:
-            v = float(value)
-        except (TypeError, ValueError):
-            v = 0.0
-        try:
-            c = float(coeff)
-        except (TypeError, ValueError):
-            c = 1.0
 
-        weighted = v * c
-        total_weighted += weighted
-        total_coeff += c
-        appreciation = _appreciation_for(v)
-        rows.append(f"<tr><td>{subject}</td><td>{v:.2f}</td><td>{c:.2f}</td><td>{(weighted/c if c else 0):.2f}</td><td>{appreciation}</td></tr>")
+def generate_report_card_pdf(student: dict, grades: list[dict], period: str, school: dict | None = None) -> str:
+	BULLETINS_DIR.mkdir(parents=True, exist_ok=True)
 
-    average = (total_weighted / total_coeff) if total_coeff else 0.0
-    general_app = _appreciation_for(average)
+	subjects_data = []
+	total_weighted = 0.0
+	total_coef = 0.0
+	for grade in grades:
+		value = float(grade.get("value", 0))
+		coef = float(grade.get("coefficient", 1))
+		subjects_data.append(
+			{
+				"subject_id": grade.get("subject_id", ""),
+				"value": value,
+				"coefficient": coef,
+				"weighted": round(value * coef / coef, 2) if coef else value,
+				"appreciation": _appreciation(value),
+			}
+		)
+		total_weighted += value * coef
+		total_coef += coef
 
-    html = html_template.format(
-        school_name=school.get("name", ""),
-        school_address=school.get("address", ""),
-        student_name=f"{student.get('last_name','')} {student.get('first_name','')}",
-        matricule=student.get("matricule", ""),
-        class_name=student.get("class_name", student.get("class_id", "")),
-        period=period,
-        grades_rows="\n".join(rows),
-        average=f"{average:.2f}",
-        rank=student.get("rank", ""),
-        general_appreciation=general_app,
-    )
+	general_average = round(total_weighted / total_coef, 2) if total_coef else 0.0
+	context = {
+		"school": school or {"name": "École Primaire SGEP"},
+		"student": student,
+		"grades": subjects_data,
+		"period": period,
+		"general_average": general_average,
+		"general_appreciation": _appreciation(general_average),
+		"rank": student.get("rank", "-"),
+	}
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        HTML(string=html).write_pdf(tmp.name)
-        return tmp.name
+	html_content = render_to_string("pdf/report_card.html", context)
+
+	try:
+		from weasyprint import HTML
+	except ImportError:  # pragma: no cover
+		file_path = BULLETINS_DIR / f"report_{student.get('id', 'unknown')}_{period}.html"
+		file_path.write_text(html_content, encoding="utf-8")
+		return str(file_path)
+
+	file_name = f"report_{student.get('id', 'unknown')}_{period}.pdf"
+	file_path = BULLETINS_DIR / file_name
+	HTML(string=html_content).write_pdf(str(file_path))
+	return str(file_path)

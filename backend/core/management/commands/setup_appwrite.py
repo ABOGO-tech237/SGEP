@@ -1,8 +1,8 @@
 """
 Django management command to initialize Appwrite collections and schemas.
-Idempotent: Safely handles existing collections, attributes, and indexes.
-Based on CDC (Cahier des Charges) SGEP specifications.
-Adapted for Cameroon primary education system.
+Idempotent: safely handles existing collections, attributes, and indexes.
+Configured to run against Appwrite Cloud through the server API key stored
+in environment variables.
 """
 
 from django.core.management.base import BaseCommand
@@ -252,16 +252,17 @@ class Command(BaseCommand):
                 {"key": "birth_place", "type": "string", "size": 100, "required": True},
                 {"key": "gender", "type": "string", "size": 10, "required": True},  # M/F
                 {"key": "id_number", "type": "string", "size": 50, "required": False},  # National ID or passport (children age 6 typically don't have one)
-                {"key": "medical_notes", "type": "string", "size": 1000, "required": False},  # Allergies, treatments
+                {"key": "medical", "type": "string", "size": 4000, "required": False, "encrypt": True},  # Encrypted JSON payload
+                {"key": "history", "type": "text", "required": False},  # Enrollment and promotion audit trail
+                {"key": "search_index", "type": "text", "required": False},  # Denormalized search helper
                 {"key": "school_id", "type": "string", "size": 36, "required": False},
                 {"key": "class_id", "type": "string", "size": 36, "required": False},
                 {"key": "academic_year_id", "type": "string", "size": 36, "required": False},
-                {"key": "current_level_id", "type": "string", "size": 36, "required": False},  # Current level (SIL, CP, etc)
-                {"key": "parent_user_id", "type": "string", "size": 36, "required": False},
-                {"key": "is_active", "type": "boolean", "required": False, "default": True},
-                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
-                {"key": "created_at", "type": "datetime", "required": False},
-                {"key": "updated_at", "type": "datetime", "required": False},
+                {"key": "is_active", "type": "boolean", "required": True, "default": True},
+                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
+                {"key": "deleted_at", "type": "datetime", "required": False},
+                {"key": "created_at", "type": "datetime", "required": True},
+                {"key": "updated_at", "type": "datetime", "required": True},
             ],
             "indexes": [
                 {"key": "idx_school_id", "type": "key", "attributes": ["school_id"]},
@@ -270,6 +271,7 @@ class Command(BaseCommand):
                 {"key": "idx_academic_year_id", "type": "key", "attributes": ["academic_year_id"]},
                 {"key": "idx_is_active", "type": "key", "attributes": ["is_active"]},
                 {"key": "idx_is_deleted", "type": "key", "attributes": ["is_deleted"]},
+                {"key": "idx_search_index", "type": "fulltext", "attributes": ["search_index"]},
             ],
         }
 
@@ -476,9 +478,11 @@ class Command(BaseCommand):
                 {"key": "number", "type": "string", "size": 50, "required": True},
                 {"key": "student_id", "type": "string", "size": 36, "required": True},
                 {"key": "academic_year_id", "type": "string", "size": 36, "required": True},
+                {"key": "fee_type_id", "type": "string", "size": 36, "required": False},
                 {"key": "amount", "type": "double", "required": True},
                 {"key": "status", "type": "string", "size": 20, "required": True},
                 {"key": "due_date", "type": "datetime", "required": True},
+                {"key": "planned_payment_date", "type": "datetime", "required": False},
                 {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
                 {"key": "created_at", "type": "datetime", "required": False},
                 {"key": "updated_at", "type": "datetime", "required": False},
@@ -500,6 +504,7 @@ class Command(BaseCommand):
                 {"key": "amount", "type": "double", "required": True},
                 {"key": "method", "type": "string", "size": 50, "required": True},
                 {"key": "reference", "type": "string", "size": 100, "required": False},
+                {"key": "receipt_path", "type": "string", "size": 500, "required": False},
                 {"key": "status", "type": "string", "size": 20, "required": True},
                 {"key": "recorded_by", "type": "string", "size": 36, "required": True},
                 {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
@@ -568,10 +573,13 @@ class Command(BaseCommand):
                 {"key": "title", "type": "string", "size": 255, "required": True},
                 {"key": "message", "type": "string", "size": 1000, "required": True},
                 {"key": "type", "type": "string", "size": 20, "required": True},
-                {"key": "is_read", "type": "boolean", "required": False, "default": False},
-                {"key": "is_deleted", "type": "boolean", "required": False, "default": False},
-                {"key": "created_at", "type": "datetime", "required": False},
-                {"key": "updated_at", "type": "datetime", "required": False},
+                {"key": "status", "type": "string", "size": 20, "required": False, "default": "pending"},
+                {"key": "sent_at", "type": "datetime", "required": False},
+                {"key": "error", "type": "string", "size": 1000, "required": False},
+                {"key": "is_read", "type": "boolean", "required": True, "default": False},
+                {"key": "is_deleted", "type": "boolean", "required": True, "default": False},
+                {"key": "created_at", "type": "datetime", "required": True},
+                {"key": "updated_at", "type": "datetime", "required": True},
             ],
             "indexes": [
                 {"key": "idx_user_id", "type": "key", "attributes": ["user_id"]},
