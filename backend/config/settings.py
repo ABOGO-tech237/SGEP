@@ -33,12 +33,19 @@ _apply_env_file(BASE_DIR / ".env.local", override=True)
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="", cast=Csv())
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    # Never expose tracebacks on Render, even if DEBUG=True is set in the dashboard.
+    DEBUG = False
+    if RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS = [*ALLOWED_HOSTS, RENDER_EXTERNAL_HOSTNAME]
+
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 
 APPWRITE_ENDPOINT = config("APPWRITE_ENDPOINT", default="https://cloud.appwrite.io/v1")
-APPWRITE_PROJECT_ID = config("APPWRITE_PROJECT_ID", default="")
-APPWRITE_API_KEY = config("APPWRITE_API_KEY", default="")
-APPWRITE_DB_ID = config("APPWRITE_DB_ID", default="sgep_db")
+APPWRITE_PROJECT_ID = config("APPWRITE_PROJECT_ID", default="6a11ae3d002ce9eb8fd1")
+APPWRITE_API_KEY = config("APPWRITE_API_KEY", default="standard_5ef1fff1a4548cc16fb170c2dffe6cf95682ec21c3a9b880cbb08c0837911dc889af2bc915ee35d8571db60e44bf2eb213c1959b53118dcfabbff223a820e3a1f453d65c429d7ae1446e46e6fbe95988ea64f522584880741b1786b580992c864198b8875bfe2e664ec27ee1f7c897313c83d60cbcb7515555d64c9e4828057a")
+APPWRITE_DB_ID = config("APPWRITE_DB_ID", default="6a11c3230008da841ac7")
 MEDICAL_ENCRYPTION_KEY = config("MEDICAL_ENCRYPTION_KEY", default="")
 
 REDIS_URL = config("REDIS_URL", default="redis://redis:6380/0")
@@ -52,6 +59,10 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="")
 
 JWT_ACCESS_TOKEN_LIFETIME = config("JWT_ACCESS_TOKEN_LIFETIME", default=900, cast=int)
 JWT_REFRESH_TOKEN_LIFETIME = config("JWT_REFRESH_TOKEN_LIFETIME", default=604800, cast=int)
+
+# One-time bootstrap: POST /api/v1/auth/bootstrap/ with X-Bootstrap-Token header.
+# Leave empty in production after creating the first admin user.
+BOOTSTRAP_SECRET = config("BOOTSTRAP_SECRET", default="")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -113,6 +124,12 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
 

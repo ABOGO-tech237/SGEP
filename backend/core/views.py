@@ -7,10 +7,11 @@ from rest_framework.views import APIView
 from accounts.permissions import IsSuperAdmin
 
 from .admin_dashboard_service import AdminDashboardService
-from .school_services import AcademicYearService, SchoolService
+from .school_services import AcademicYearService, LevelService, SchoolService
 from .serializers import (
 	AcademicYearSerializer,
 	AdminDashboardResponseSerializer,
+	LevelSerializer,
 	SchoolSerializer,
 )
 
@@ -39,6 +40,13 @@ class SchoolDetailView(APIView):
 		serializer.is_valid(raise_exception=True)
 		school = SchoolService.update(pk, serializer.validated_data)
 		return Response(SchoolSerializer(school).data)
+
+
+class LevelListView(APIView):
+	permission_classes = [IsSuperAdmin]
+
+	def get(self, request):
+		return Response(LevelSerializer(LevelService.list(), many=True).data)
 
 
 class AcademicYearListCreateView(APIView):

@@ -8,7 +8,44 @@ from rest_framework.test import APIClient
 from accounts.models import ROLE_SUPERADMIN, User
 from core.audit import log_action
 from core.exceptions import NotFoundError
+from core.appwrite_utils import install_appwrite_get_body_shim
 from core.school_services import AcademicYearService, SchoolService
+
+
+class AppwriteGetBodyShimTests(SimpleTestCase):
+	def test_get_requests_strip_content_type(self):
+		from appwrite.client import Client
+
+		seen_headers: dict = {}
+		original_call = Client.call
+
+		def _recording_call(self, method, path="", headers=None, params=None, response_type="json"):
+			seen_headers.update(headers or {})
+			return {}
+
+		Client.call = _recording_call
+		Client._sgep_get_body_shim = False
+		install_appwrite_get_body_shim()
+
+		client = Client()
+		client.call("get", "/databases/db/collections/users/documents", {"content-type": "application/json"}, {})
+
+		self.assertEqual(seen_headers.get("content-type"), "")
+		Client.call = original_call
+		Client._sgep_get_body_shim = False
+
+	def test_shim_is_idempotent(self):
+		from appwrite.client import Client
+
+		original_call = Client.call
+		Client.call = lambda *args, **kwargs: {}
+		Client._sgep_get_body_shim = False
+		install_appwrite_get_body_shim()
+		first_patched = Client.call
+		install_appwrite_get_body_shim()
+		self.assertIs(Client.call, first_patched)
+		Client.call = original_call
+		Client._sgep_get_body_shim = False
 
 
 class AuditTests(SimpleTestCase):

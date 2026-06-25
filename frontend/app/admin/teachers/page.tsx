@@ -1,10 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
 
 import { AdminShell } from "@/components/admin/AdminShell";
 import { DataTable } from "@/components/ui/DataTable";
+import { buildNameLookup, lookupName } from "@/lib/lookups";
+import type { LevelRecord } from "@/lib/types/core";
 import type { ClassRecord } from "@/lib/types/classes";
 
 async function fetchClasses(): Promise<ClassRecord[]> {
@@ -13,24 +16,67 @@ async function fetchClasses(): Promise<ClassRecord[]> {
   return (await response.json()) as ClassRecord[];
 }
 
-const columns: ColumnDef<ClassRecord>[] = [
-  { accessorKey: "name", header: "Class" },
-  { accessorKey: "teacher_id", header: "Teacher ID", cell: ({ getValue }) => (getValue() as string) || "Unassigned" },
-  { accessorKey: "level_id", header: "Level" },
-  { accessorKey: "capacity", header: "Capacity", cell: ({ getValue }) => String(getValue() ?? "—") },
-];
-
-const unassignedColumns: ColumnDef<ClassRecord>[] = [
-  { accessorKey: "name", header: "Class" },
-  { accessorKey: "level_id", header: "Level" },
-  { accessorKey: "capacity", header: "Capacity", cell: ({ getValue }) => String(getValue() ?? "—") },
-];
+async function fetchLevels(): Promise<LevelRecord[]> {
+  const response = await fetch("/api/admin/levels");
+  if (!response.ok) throw new Error("Unable to load levels.");
+  return (await response.json()) as LevelRecord[];
+}
 
 export default function TeachersPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "classes"],
     queryFn: fetchClasses,
   });
+  const levelsQuery = useQuery({
+    queryKey: ["admin", "levels"],
+    queryFn: fetchLevels,
+  });
+
+  const levelNames = useMemo(
+    () => buildNameLookup(levelsQuery.data ?? []),
+    [levelsQuery.data],
+  );
+
+  const columns = useMemo<ColumnDef<ClassRecord>[]>(
+    () => [
+      { accessorKey: "name", header: "Class" },
+      {
+        accessorKey: "teacher_id",
+        header: "Teacher ID",
+        cell: ({ getValue }) => (getValue() as string) || "Unassigned",
+      },
+      {
+        id: "level",
+        header: "Level",
+        accessorFn: (row) => lookupName(levelNames, row.level_id, row.level_id),
+        cell: ({ row }) => lookupName(levelNames, row.original.level_id, row.original.level_id),
+      },
+      {
+        accessorKey: "capacity",
+        header: "Capacity",
+        cell: ({ getValue }) => String(getValue() ?? "—"),
+      },
+    ],
+    [levelNames],
+  );
+
+  const unassignedColumns = useMemo<ColumnDef<ClassRecord>[]>(
+    () => [
+      { accessorKey: "name", header: "Class" },
+      {
+        id: "level",
+        header: "Level",
+        accessorFn: (row) => lookupName(levelNames, row.level_id, row.level_id),
+        cell: ({ row }) => lookupName(levelNames, row.original.level_id, row.original.level_id),
+      },
+      {
+        accessorKey: "capacity",
+        header: "Capacity",
+        cell: ({ getValue }) => String(getValue() ?? "—"),
+      },
+    ],
+    [levelNames],
+  );
 
   const assigned = (data ?? []).filter((item) => item.teacher_id?.trim());
   const unassigned = (data ?? []).filter((item) => !item.teacher_id?.trim());

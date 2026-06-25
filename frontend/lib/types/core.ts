@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export interface LevelRecord {
+  id: string;
+  code: string;
+  name: string;
+  cycle?: string;
+  age?: number | null;
+  language?: string;
+  is_active?: boolean;
+}
+
 export interface SchoolRecord {
   id: string;
   name: string;

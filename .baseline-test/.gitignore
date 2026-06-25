@@ -1,0 +1,4 @@
+node_modules/
+.next/
+CODEBASE_SUMMARY.md
+**.pyc

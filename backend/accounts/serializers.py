@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.models import ROLE_COMPTABLE, ROLE_PARENT, ROLE_SUPERADMIN
+
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -32,6 +34,30 @@ class ChangePasswordSerializer(serializers.Serializer):
             )
 
         return attrs
+
+
+class BootstrapSerializer(serializers.Serializer):
+    email = serializers.EmailField(default="admin@sgep.cm", required=False)
+    password = serializers.CharField(
+        default="AdminPassword123!",
+        trim_whitespace=False,
+        write_only=True,
+        required=False,
+    )
+    role = serializers.ChoiceField(
+        choices=[ROLE_SUPERADMIN, ROLE_COMPTABLE, ROLE_PARENT],
+        default=ROLE_SUPERADMIN,
+        required=False,
+    )
+    first_name = serializers.CharField(default="Admin", required=False)
+    last_name = serializers.CharField(default="SGEP", required=False)
+
+    def validate_password(self, value):
+        if len(value or "") < 8:
+            raise serializers.ValidationError(
+                "Le mot de passe doit contenir au moins 8 caracteres."
+            )
+        return value
 
 
 class AdminUserSummarySerializer(serializers.Serializer):
