@@ -9,8 +9,8 @@ import { FormField } from "@/components/ui/FormField";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
-  UpdateStudentSchema,
-  type UpdateStudentFormValues,
+  StudentCreateSchema,
+  type StudentCreateValues,
   type StudentDetail,
 } from "@/lib/types/students";
 
@@ -44,8 +44,8 @@ export function StudentDetailClient({ student }: Props) {
     reset,
     control,
     formState: { errors, isSubmitting },
-  } = useForm<UpdateStudentFormValues>({
-    resolver: zodResolver(UpdateStudentSchema),
+  } = useForm<StudentCreateValues>({
+    resolver: zodResolver(StudentCreateSchema),
     defaultValues: {
       first_name: student.first_name,
       last_name: student.last_name,
@@ -65,7 +65,7 @@ export function StudentDetailClient({ student }: Props) {
     setEditOpen(false);
   }
 
-  async function onSubmit(data: UpdateStudentFormValues) {
+  async function onSubmit(data: StudentCreateValues) {
     setServerError(null);
     const res = await fetch(`/api/students/${student.id}`, {
       method: "PATCH",

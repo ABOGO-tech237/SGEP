@@ -1,65 +1,61 @@
 import { z } from "zod";
 
-export const StudentListItemSchema = z.object({
-  id: z.string(),
-  matricule: z.string(),
-  first_name: z.string(),
-  last_name: z.string(),
-  class_id: z.string().nullable().optional(),
-  academic_year_id: z.string().nullable().optional(),
+export interface StudentListItem {
+  id: string;
+  matricule: string;
+  first_name: string;
+  last_name: string;
+  class_id?: string | null;
+  academic_year_id?: string | null;
+  is_active?: boolean;
+}
+
+export interface StudentDetail extends StudentListItem {
+  birth_date: string;
+  birth_place: string;
+  gender: string;
+  id_number?: string | null;
+  school_id?: string | null;
+  is_deleted?: boolean;
+  medical?: Record<string, unknown> | null;
+  history?: Array<Record<string, unknown>>;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+}
+
+export interface StudentsListResponse {
+  items: StudentListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export const StudentCreateSchema = z.object({
+  first_name: z.string().min(1, "First name is required."),
+  last_name: z.string().min(1, "Last name is required."),
+  matricule: z.string().min(1, "Matricule is required."),
+  birth_date: z.string().min(1, "Birth date is required."),
+  birth_place: z.string().min(1, "Birth place is required."),
+  gender: z.string().min(1, "Gender is required."),
+  id_number: z.string().optional(),
+  class_id: z.string().min(1, "Class is required."),
+  academic_year_id: z.string().min(1, "Academic year is required."),
+  school_id: z.string().optional(),
   is_active: z.boolean().optional(),
 });
 
-export type StudentListItem = z.infer<typeof StudentListItemSchema>;
+export type StudentCreateValues = z.infer<typeof StudentCreateSchema>;
 
-export const StudentDetailSchema = StudentListItemSchema.extend({
-  birth_date: z.string(),
-  birth_place: z.string(),
-  gender: z.string(),
-  id_number: z.string().nullable().optional(),
-  school_id: z.string().nullable().optional(),
-  is_deleted: z.boolean().optional(),
-  medical: z.record(z.string(), z.unknown()).nullable().optional(),
-  history: z.array(z.record(z.string(), z.unknown())).optional(),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
-  deleted_at: z.string().nullable().optional(),
+export const StudentEnrollSchema = z.object({
+  class_id: z.string().min(1, "Class is required."),
+  academic_year_id: z.string().min(1, "Academic year is required."),
 });
 
-export type StudentDetail = z.infer<typeof StudentDetailSchema>;
+export type StudentEnrollValues = z.infer<typeof StudentEnrollSchema>;
 
-export const StudentsListResponseSchema = z.object({
-  items: z.array(StudentListItemSchema),
-  total: z.number(),
-  page: z.number(),
-  page_size: z.number(),
+export const StudentPromoteSchema = z.object({
+  target_class_id: z.string().min(1, "Target class is required."),
 });
 
-export type StudentsListResponse = z.infer<typeof StudentsListResponseSchema>;
-
-export const CreateStudentSchema = z.object({
-  first_name: z.string().min(1, "Required"),
-  last_name: z.string().min(1, "Required"),
-  birth_date: z.string().min(1, "Required"),
-  birth_place: z.string().min(1, "Required"),
-  gender: z.enum(["M", "F"]),
-  class_id: z.string().min(1, "Required"),
-  academic_year_id: z.string().min(1, "Required"),
-  id_number: z.string().optional(),
-});
-
-export type CreateStudentFormValues = z.infer<typeof CreateStudentSchema>;
-
-export const UpdateStudentSchema = z.object({
-  first_name: z.string().min(1, "Required"),
-  last_name: z.string().min(1, "Required"),
-  birth_date: z.string().min(1, "Required"),
-  birth_place: z.string().min(1, "Required"),
-  gender: z.enum(["M", "F"]),
-  class_id: z.string().min(1, "Required"),
-  academic_year_id: z.string().min(1, "Required"),
-  id_number: z.string().optional(),
-  is_active: z.boolean().optional(),
-});
-
-export type UpdateStudentFormValues = z.infer<typeof UpdateStudentSchema>;
+export type StudentPromoteValues = z.infer<typeof StudentPromoteSchema>;

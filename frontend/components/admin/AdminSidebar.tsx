@@ -1,44 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname } from "next/navigation";
 import {
-  GraduationCap,
   BookOpen,
-  LayoutDashboard,
-  UserCheck,
   FileText,
+  GraduationCap,
+  LayoutDashboard,
   Settings,
-  Bell,
-  LogOut,
+  UserCheck,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
-  { label: "Students", icon: GraduationCap, href: "/admin/students" },
-  { label: "Teachers", icon: UserCheck, href: "/admin/teachers" },
-  { label: "Classes", icon: BookOpen, href: "/admin/classes" },
-  { label: "Reports", icon: FileText, href: "/admin/reports" },
-  { label: "Settings", icon: Settings, href: "/admin/settings" },
+import { cn } from "@/lib/utils";
+import { SignOutButton } from "@/components/admin/SignOutButton";
+
+const NAV_ITEMS: Array<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+}> = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/admin/students", label: "Students", icon: GraduationCap },
+  { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
+  { href: "/admin/classes", label: "Classes", icon: BookOpen },
+  { href: "/admin/reports", label: "Reports", icon: FileText },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { logout } = useAuth();
-  const [signingOut, setSigningOut] = useState(false);
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    try {
-      await logout();
-      router.replace("/login");
-    } finally {
-      setSigningOut(false);
-    }
-  }
 
   return (
     <aside className="w-60 flex flex-col border-r border-border bg-card shrink-0">
@@ -50,18 +41,18 @@ export function AdminSidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {navItems.map(({ label, icon: Icon, href }) => {
-          const active =
-            href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+        {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+          const active = exact ? pathname === href : pathname.startsWith(href);
           return (
             <Link
-              key={label}
+              key={href}
               href={href}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
             >
               <Icon className="size-4 shrink-0" />
               {label}
@@ -70,22 +61,8 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      <div className="px-3 py-4 border-t border-border space-y-1">
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-          <Bell className="size-4 shrink-0" />
-          Notifications
-          <span className="ml-auto bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 font-medium">
-            3
-          </span>
-        </button>
-        <button
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <LogOut className="size-4 shrink-0" />
-          {signingOut ? "Signing out…" : "Sign out"}
-        </button>
+      <div className="px-3 py-4 border-t border-border">
+        <SignOutButton />
       </div>
     </aside>
   );

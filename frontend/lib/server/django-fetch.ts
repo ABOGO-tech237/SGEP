@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { DJANGO_TOKEN_COOKIE } from "@/lib/auth/constants";
+import { DJANGO_ACCESS_COOKIE } from "@/lib/auth/constants";
 
 export class DjangoApiError extends Error {
   constructor(
@@ -20,7 +20,7 @@ export async function djangoFetch(
     throw new Error("DJANGO_API_URL environment variable is not set");
 
   const cookieStore = await cookies();
-  const token = cookieStore.get(DJANGO_TOKEN_COOKIE)?.value;
+  const token = cookieStore.get(DJANGO_ACCESS_COOKIE)?.value;
   if (!token) throw new DjangoApiError(503, "Backend session not ready — please wait a moment and refresh the page.");
 
   const response = await fetch(`${apiUrl}${path}`, {

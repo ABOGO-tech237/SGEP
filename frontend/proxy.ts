@@ -1,26 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-import { PROXY_SESSION_COOKIE } from "@/lib/auth/constants";
+import {
+  ROLE_ROUTE_PREFIX,
+  ROLE_COOKIE,
+  USER_ROLES,
+  type UserRole,
+} from "@/lib/auth/constants";
 
 const LOGIN_URL = "/login";
-
-// Maps JWT role claim values to the route prefix they're allowed to access.
-// Role names match Django's conventions (SCREAMING_SNAKE_CASE).
-const JWT_ROLE_ROUTES: Record<string, string> = {
-  SUPER_ADMIN: "/admin",
-  ADMIN: "/admin",
-  TEACHER: "/teacher",
-  STUDENT: "/students",
-  PARENT: "/parent",
-  ACCOUNTANT: "/accountant",
-};
-
-const PROTECTED_PREFIXES = [...new Set(Object.values(JWT_ROLE_ROUTES))];
-
-function isProtectedRoute(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
 
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
@@ -32,14 +19,16 @@ function buildCsp(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "font-src 'self'",
+    "font-src 'self' data:",
     `connect-src 'self' ${appwriteOrigin}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
   ];
+  if (!isDev) {
+    directives.push("upgrade-insecure-requests");
+  }
   return directives.join("; ");
 }
 
@@ -54,11 +43,29 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
   );
 }
 
+function canAccessRoute(role: UserRole, pathname: string): boolean {
+  const allowedPrefix = ROLE_ROUTE_PREFIX[role];
+  if (allowedPrefix && pathname.startsWith(allowedPrefix)) {
+    return true;
+  }
+  if (role === USER_ROLES.ADMIN && pathname.startsWith("/accountant")) {
+    return true;
+  }
+  return false;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
-  if (!isProtectedRoute(pathname)) {
+  const isProtectedRoute =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/accountant") ||
+    pathname.startsWith("/teacher") ||
+    pathname.startsWith("/student") ||
+    pathname.startsWith("/parent");
+
+  if (!isProtectedRoute) {
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-nonce", nonce);
     const response = NextResponse.next({
@@ -68,39 +75,19 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const token = request.cookies.get(PROXY_SESSION_COOKIE)?.value;
+  const role = request.cookies.get(ROLE_COOKIE)?.value as UserRole | undefined;
 
-  if (!token) {
+  if (!role || !canAccessRoute(role, pathname)) {
     return NextResponse.redirect(new URL(LOGIN_URL, request.url));
   }
 
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
-    const { payload } = await jwtVerify(token, secret);
-    const role = payload.role as string | undefined;
-    const allowedPrefix = role ? JWT_ROLE_ROUTES[role] : undefined;
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("x-user-role", role);
 
-    if (!allowedPrefix || !pathname.startsWith(allowedPrefix)) {
-      return NextResponse.redirect(new URL(LOGIN_URL, request.url));
-    }
-
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-nonce", nonce);
-    requestHeaders.set("x-user-role", role!);
-    const response = NextResponse.next({ request: { headers: requestHeaders } });
-    applySecurityHeaders(response, nonce);
-    return response;
-  } catch {
-    // JWT is invalid or expired — clear the session cookie and force re-login
-    const response = NextResponse.redirect(new URL(LOGIN_URL, request.url));
-    response.cookies.set({
-      name: PROXY_SESSION_COOKIE,
-      value: "",
-      expires: new Date(0),
-      path: "/",
-    });
-    return response;
-  }
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  applySecurityHeaders(response, nonce);
+  return response;
 }
 
 export const config = {

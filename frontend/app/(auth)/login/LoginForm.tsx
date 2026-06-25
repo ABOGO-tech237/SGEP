@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -8,9 +8,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { LoginSchema, type LoginFormValues } from "@/lib/types/auth";
-import { useAuth } from "@/context/AuthContext";
 import { useSessionStore } from "@/stores/session";
 import { ROLE_ROUTE_PREFIX } from "@/lib/auth/constants";
+import type { LoginApiResponse } from "@/lib/types/auth";
 
 type StrengthLevel = "weak" | "fair" | "strong";
 
@@ -39,17 +39,23 @@ const STRENGTH_CONFIG: Record<
 
 interface LoginFormProps {
   resetSuccess?: boolean;
+  initialEmail?: string;
+  initialPassword?: string;
 }
 
-export default function LoginForm({ resetSuccess }: LoginFormProps) {
+export default function LoginForm({
+  resetSuccess,
+  initialEmail,
+  initialPassword,
+}: LoginFormProps) {
   "use no memo";
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { login } = useAuth();
   const setUser = useSessionStore((s) => s.setUser);
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const autoLoginStarted = useRef(false);
 
   const [password, setPassword] = useState("");
 
@@ -59,6 +65,10 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(LoginSchema),
+    defaultValues: {
+      email: initialEmail ?? "",
+      password: initialPassword ?? "",
+    },
   });
 
   const passwordRegister = register("password", {
@@ -68,42 +78,64 @@ export default function LoginForm({ resetSuccess }: LoginFormProps) {
 
   const strength = getPasswordStrength(password);
 
-  async function onSubmit(data: LoginFormValues) {
+  function getLoginDestination(role: LoginApiResponse["role"]): string {
+    return ROLE_ROUTE_PREFIX[role];
+  }
+
+  async function submitLogin(data: LoginFormValues) {
     setServerError(null);
     try {
-      const user = await login(data.email, data.password);
-      const roleRes = await fetch("/api/auth/role", {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: user.role }),
+        body: JSON.stringify(data),
       });
-      if (!roleRes.ok) {
-        const body = await roleRes.json().catch(() => ({}));
+
+      const payload = (await response.json().catch(() => null)) as
+        | LoginApiResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok || !payload || !("role" in payload) || !("user" in payload)) {
         throw new Error(
-          (body as { error?: string }).error ??
-            "Session setup failed. Please try again.",
+          (payload && "error" in payload && payload.error) ||
+            "Something went wrong.",
         );
       }
-      // Wait up to 5 s for the Django token cookie to be set before navigating.
-      // If the backend is cold-starting (Render free tier) we proceed anyway and
-      // the Students page will show the "Try again" banner instead of blocking login.
-      await Promise.race([
-        fetch("/api/auth/django", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: data.email, password: data.password }),
-        }).catch(() => {}),
-        new Promise((resolve) => setTimeout(resolve, 5000)),
-      ]);
-      setUser(user);
+
+      await fetch("/api/auth/role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: payload.role }),
+      });
+
+      setUser(payload.user);
       queryClient.clear();
-      router.replace(ROLE_ROUTE_PREFIX[user.role]);
+      router.replace(getLoginDestination(payload.role));
     } catch (err) {
       console.error("[login] failed:", err);
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
       setServerError(message);
     }
+  }
+
+  useEffect(() => {
+    if (autoLoginStarted.current) return;
+    if (!initialEmail || !initialPassword) return;
+
+    autoLoginStarted.current = true;
+    // Defer to avoid the setState-in-effect lint rule; submitLogin calls setServerError
+    // asynchronously (after await), but the rule is a static-analysis check.
+    void Promise.resolve().then(() =>
+      submitLogin({ email: initialEmail, password: initialPassword }),
+    );
+    // submitLogin intentionally omitted: one-shot auto-login when credentials are prefilled
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEmail, initialPassword]);
+
+  async function onSubmit(data: LoginFormValues) {
+    await submitLogin(data);
   }
 
   return (

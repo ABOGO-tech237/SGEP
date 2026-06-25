@@ -1,23 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { SignJWT } from "jose";
 import { proxy } from "../proxy";
-import { PROXY_SESSION_COOKIE } from "../lib/auth/constants";
+import { ROLE_COOKIE, USER_ROLES } from "../lib/auth/constants";
 
 const BASE_URL = "http://localhost:3000";
-const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
 
-async function makeJwt(role: string): Promise<string> {
-  return new SignJWT({ role, sub: "user-1" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("1h")
-    .sign(SECRET);
-}
-
-function request(path: string, cookie?: string): NextRequest {
+function request(path: string, role?: string): NextRequest {
   const req = new NextRequest(`${BASE_URL}${path}`);
-  if (cookie) req.cookies.set(PROXY_SESSION_COOKIE, cookie);
+  if (role) req.cookies.set(ROLE_COOKIE, role);
   return req;
 }
 
@@ -54,35 +45,36 @@ describe("proxy — public routes pass through", () => {
 });
 
 describe("proxy — RBAC enforcement", () => {
-  it("lets SUPER_ADMIN access /admin", async () => {
-    const token = await makeJwt("SUPER_ADMIN");
-    const res = await proxy(request("/admin/students", token));
+  it("lets admin access /admin", async () => {
+    const res = await proxy(request("/admin/students", USER_ROLES.ADMIN));
     expect(res.status).not.toBe(307);
   });
 
-  it("blocks SUPER_ADMIN from /accountant", async () => {
-    const token = await makeJwt("SUPER_ADMIN");
-    const res = await proxy(request("/accountant/invoices", token));
+  it("lets admin access /accountant", async () => {
+    const res = await proxy(request("/accountant/invoices", USER_ROLES.ADMIN));
+    expect(res.status).not.toBe(307);
+  });
+
+  it("blocks admin from /parent", async () => {
+    const res = await proxy(request("/parent/children", USER_ROLES.ADMIN));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login");
   });
 
-  it("lets ACCOUNTANT access /accountant", async () => {
-    const token = await makeJwt("ACCOUNTANT");
-    const res = await proxy(request("/accountant/invoices", token));
-    expect(res.status).not.toBe(307);
-  });
-
-  it("blocks ACCOUNTANT from /admin", async () => {
-    const token = await makeJwt("ACCOUNTANT");
-    const res = await proxy(request("/admin/students", token));
+  it("blocks parent from /admin", async () => {
+    const res = await proxy(request("/admin/students", USER_ROLES.PARENT));
     expect(res.status).toBe(307);
   });
 
-  it("lets PARENT access /parent", async () => {
-    const token = await makeJwt("PARENT");
-    const res = await proxy(request("/parent/children", token));
+  it("lets parent access /parent", async () => {
+    const res = await proxy(request("/parent/children", USER_ROLES.PARENT));
     expect(res.status).not.toBe(307);
+  });
+
+  it("blocks parent from /accountant", async () => {
+    const res = await proxy(request("/accountant/invoices", USER_ROLES.PARENT));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/login");
   });
 });
 
@@ -124,13 +116,10 @@ describe("proxy — security headers", () => {
   });
 });
 
-describe("proxy — invalid token", () => {
-  it("redirects and clears cookie when JWT is tampered", async () => {
-    const res = await proxy(request("/admin/students", "invalid.jwt.token"));
+describe("proxy — invalid role cookie", () => {
+  it("redirects to login when role cookie does not match route", async () => {
+    const res = await proxy(request("/admin/students", USER_ROLES.PARENT));
     expect(res.status).toBe(307);
-    const setCookie = res.headers.get("set-cookie");
-    expect(setCookie).toContain(PROXY_SESSION_COOKIE);
-    // Cookie cleared when session is expired: Expires set to epoch or Max-Age=0
-    expect(setCookie).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
+    expect(res.headers.get("location")).toContain("/login");
   });
 });

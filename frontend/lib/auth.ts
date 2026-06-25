@@ -1,6 +1,7 @@
 import { ID } from "appwrite";
 import { createAppwriteClient, createAccount, createTeams } from "./appwrite";
-import { type UserRole, TEAM_IDS, TEAM_ID_TO_ROLE } from "./auth/constants";
+import { resolveSchoolUser } from "./auth/resolve-user";
+import { type UserRole, TEAM_IDS } from "./auth/constants";
 
 export interface SchoolUser {
   id: string;
@@ -42,30 +43,8 @@ export async function logout(): Promise<void> {
 export async function getAuthUser(): Promise<SchoolUser | null> {
   try {
     const client = createAppwriteClient();
-    const account = createAccount(client);
-    const teamsService = createTeams(client);
-    console.log("[auth] getAuthUser: calling account.get()...");
-    const user = await account.get();
-    console.log("[auth] account.get() ok:", user.$id);
-    const userTeams = await teamsService.list();
-    console.log("[auth] teams:", userTeams.teams.map((t) => t.name));
-    const roleTeam = userTeams.teams[0];
-    if (!roleTeam) {
-      console.warn("[auth] getAuthUser: session valid but user has no team membership");
-      return null;
-    }
-    const role = TEAM_ID_TO_ROLE[roleTeam.$id];
-    if (!role) {
-      console.warn("[auth] getAuthUser: unrecognised team ID:", roleTeam.$id);
-      return null;
-    }
-    return {
-      id: user.$id,
-      name: user.name,
-      email: user.email,
-      role,
-      teamId: roleTeam.$id,
-    };
+    console.log("[auth] getAuthUser: resolving user from Appwrite session...");
+    return await resolveSchoolUser(client);
   } catch (err: unknown) {
     const e = err as { code?: number; type?: string; message?: string };
     console.warn("[auth] getAuthUser failed:", {

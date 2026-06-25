@@ -4,8 +4,16 @@ from django.contrib.auth.hashers import check_password, make_password
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from appwrite.query import Query
 
-from accounts.models import ACCOUNT_STATUS_SUSPENDED, User
+from accounts.models import (
+    ACCOUNT_STATUS_ACTIVE,
+    ACCOUNT_STATUS_SUSPENDED,
+    ROLE_COMPTABLE,
+    ROLE_PARENT,
+    ROLE_SUPERADMIN,
+    User,
+)
 from accounts.repository import RefreshTokenBlacklistRepository, UserRepository
 
 
@@ -97,3 +105,49 @@ class AuthService:
             raise AuthenticationFailed("Ancien mot de passe invalide.")
 
         UserRepository.update(user_id=user_id, data={"password": make_password(new_password)})
+
+
+class AdminDashboardService:
+    @staticmethod
+    def _build_user_summary(document: dict) -> dict:
+        first_name = str(document.get("first_name", "") or "").strip()
+        last_name = str(document.get("last_name", "") or "").strip()
+        name = str(document.get("name", "") or "").strip()
+        full_name = " ".join(part for part in [first_name, last_name] if part).strip()
+
+        return {
+            "id": document.get("id", ""),
+            "email": document.get("email", ""),
+            "name": name or full_name or document.get("email", ""),
+            "first_name": first_name,
+            "last_name": last_name,
+            "role": document.get("role", ROLE_PARENT),
+            "account_status": document.get("account_status", ACCOUNT_STATUS_ACTIVE),
+            "created_at": str(document.get("created_at", document.get("$createdAt", "")) or ""),
+            "updated_at": str(document.get("updated_at", document.get("$updatedAt", "")) or ""),
+        }
+
+    @staticmethod
+    def get_overview() -> dict:
+        total_users = UserRepository.count()
+        active_users = UserRepository.count([Query.equal("account_status", [ACCOUNT_STATUS_ACTIVE])])
+        suspended_users = UserRepository.count([Query.equal("account_status", [ACCOUNT_STATUS_SUSPENDED])])
+        superadmins = UserRepository.count([Query.equal("role", [ROLE_SUPERADMIN])])
+        comptables = UserRepository.count([Query.equal("role", [ROLE_COMPTABLE])])
+        parents = UserRepository.count([Query.equal("role", [ROLE_PARENT])])
+
+        recent_response = UserRepository.list(limit=5)
+        recent_users = [
+            AdminDashboardService._build_user_summary(document)
+            for document in recent_response.get("documents", [])
+        ]
+
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "suspended_users": suspended_users,
+            "superadmins": superadmins,
+            "comptables": comptables,
+            "parents": parents,
+            "recent_users": recent_users,
+        }

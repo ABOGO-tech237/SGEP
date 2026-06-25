@@ -1,243 +1,159 @@
 # SGEP
 
-Système de Gestion d'Ecole Primaire adapte au contexte camerounais.
+Système de Gestion d'École Primaire adapté au contexte camerounais.
 
-Ce depot contient le backend Django du projet. La couche metier utilise Appwrite pour la persistence des donnees, et Simple JWT uniquement pour emettre et valider les tokens d'authentification.
-
-## Objectif de ce travail
-
-La zone `accounts` a ete mise en place pour couvrir l'authentification complete:
-
-- modele utilisateur custom base sur `AbstractBaseUser`
-- repository Appwrite pour la collection `users`
-- generation des tokens `access_token` et `refresh_token`
-- renouvellement du token d'acces
-- logout avec blacklist du refresh token dans Appwrite
-- changement de mot de passe
-- permissions DRF conformes au cahier des charges
-- rate limiting sur le login
+Backend Django REST exposant une API versionnée (`/api/v1/`). La persistance métier passe par **Appwrite Cloud** ; l'authentification utilise **Simple JWT** (tokens émis et validés côté Django, users stockés dans Appwrite).
 
 ## Architecture
 
-Le projet suit le principe suivant:
+```
+View DRF → Service → Repository → Appwrite SDK
+```
 
-`View DRF -> Service -> Repository -> Appwrite SDK`
+Les vues ne parlent jamais directement à Appwrite. Les opérations lourdes (PDF, Excel, emails) sont déléguées à **Celery**.
 
-Les vues ne parlent pas directement a Appwrite. Toute la logique d'acces aux donnees passe par les repositories.
+### Modules
+
+| Module | Rôle |
+|--------|------|
+| `accounts/` | Auth JWT, rôles, blacklist refresh tokens |
+| `core/` | Écoles, années scolaires, audit, middleware IP, OpenAPI |
+| `classes/` | Classes et matières |
+| `students/` | Élèves, inscriptions, promotions, exports |
+| `attendance/` | Absences, retards, statistiques, exports |
+| `grades/` | Notes, bulletins PDF, export résultats Excel |
+| `finance/` | Factures, paiements, reçus, tableau de bord |
+| `parents/` | Portail parent, messagerie, suspension comptes |
+| `notifications/` | Tâches Celery email (absences, bulletins, relances) |
+| `reports/` | Jobs d'export async, Excel formaté (openpyxl) |
 
 ## Authentification
 
-### Modele utilisateur
+Endpoints : `POST /api/v1/auth/login/`, `refresh/`, `logout/`, `change-password/`.
 
-Le modele utilisateur se trouve dans [accounts/models.py](accounts/models.py).
+Rôles : `superadmin`, `comptable`, `parent`. Permissions DRF dans `accounts/permissions.py`.
 
-Champs principaux:
+## Endpoints principaux
 
-- `id`: UUID primaire
-- `email`: identifiant de connexion
-- `role`: `superadmin`, `comptable`, `parent`
-- `account_status`: `active`, `suspended`
-- `student_id`: nullable, prevu pour les parents
+### Core
+- `GET/POST /api/v1/schools/`
+- `GET/PATCH /api/v1/schools/<id>/`
+- `GET/POST /api/v1/academic-years/`
+- `GET/PATCH /api/v1/academic-years/<id>/`
 
-Points importants:
+### Classes
+- `GET/POST /api/v1/classes/`
+- `GET/PATCH /api/v1/classes/<id>/`
+- `GET/POST /api/v1/subjects/`
+- `GET/PATCH /api/v1/subjects/<id>/`
 
-- il n'y a pas de champ `username`
-- l'email est le login
-- le modele est configure pour travailler avec Appwrite cote persistence metier
+### Students
+- CRUD élèves, inscription, promotion, historique
+- Exports PDF/Excel asynchrones (`202` + `job_id`)
 
-### Repository Appwrite
+### Attendance
+- CRUD absences, justification, statistiques, export
 
-Le repository d'auth est dans [accounts/repository.py](accounts/repository.py).
+### Grades & bulletins
+- CRUD notes, saisie en masse
+- Génération bulletins PDF (`report-cards/generate/`)
+- Export résultats Excel (`grades/export/results/`)
 
-Collections utilisees:
+### Finance
+- Factures, paiements, reçus, dashboard, relances automatiques (7/15/30 j)
 
-- `users`
-- `refresh_token_blacklist`
+### Parent portal (`/api/v1/parent/me/...`)
+- Profil, élève, notes, absences, bulletins, factures, messagerie
 
-Responsabilites:
+### Reports (jobs async)
+- `GET /api/v1/reports/<job_id>/status/`
+- `GET /api/v1/reports/<job_id>/download/`
 
-- lire un user par email
-- lire un user par id
-- creer un user
-- mettre a jour un user
-- ajouter un refresh token a la blacklist
-- verifier si un jti est deja blacklist
+### Admin
+- `GET /api/v1/admin/dashboard/` — tableau de bord (stats élèves, classes, finance, activité)
 
-### Service d'auth
+## Documentation API (Swagger)
 
-La logique metier est dans [accounts/services.py](accounts/services.py).
+| URL | Interface |
+|-----|-----------|
+| `/api/docs/` | Swagger UI |
+| `/api/redoc/` | ReDoc |
+| `/api/schema/` | Schéma OpenAPI |
 
-Fonctions fournies:
+Guide : [docs/swagger.md](docs/swagger.md)
 
-- `login(email, password)`
-- `refresh_access_token(refresh_token)`
-- `logout(refresh_token)`
-- `change_password(user_id, old_password, new_password)`
+```bash
+python manage.py spectacular --color --file schema.yml
+```
 
-### Endpoints
+## Appwrite Cloud
 
-Les routes sont definies dans [accounts/urls.py](accounts/urls.py).
+Variables : voir [.env.example](.env.example). Guide : [docs/appwrite-cloud-integration.md](docs/appwrite-cloud-integration.md).
 
-#### POST `/api/v1/auth/login/`
+Initialiser les collections :
 
-Retourne:
+```bash
+python manage.py setup_appwrite
+```
 
-- `access_token`
-- `refresh_token`
+## Tâches Celery
 
-#### POST `/api/v1/auth/refresh/`
-
-Retourne:
-
-- `access_token`
-
-#### POST `/api/v1/auth/logout/`
-
-Effet:
-
-- blacklist du refresh token dans Appwrite
-
-#### POST `/api/v1/auth/change-password/`
-
-Effet:
-
-- verification de l'ancien mot de passe
-- hash du nouveau mot de passe
-- mise a jour du user dans Appwrite
-
-## Permissions
-
-Les permissions DRF sont dans [accounts/permissions.py](accounts/permissions.py).
-
-Classes disponibles:
-
-- `IsSuperAdmin`
-- `IsComptable`
-- `IsActiveParent`
-- `IsParentAny`
-
-Roles geres:
-
-- `superadmin`
-- `comptable`
-- `parent`
-
-## Rate limiting
-
-Le login est protege par un rate limit de 5 tentatives toutes les 10 minutes.
-
-Implementation:
-
-- decorateur `django-ratelimit`
-- applique sur `LoginView`
-
-## Configuration Django
-
-Le routage global est branche dans [config/urls.py](config/urls.py).
-
-Les points importants de configuration sont:
-
-- `AUTH_USER_MODEL = "accounts.User"`
-- auth JWT custom via `accounts.authentication.AppwriteJWTAuthentication`
-- handler global d'erreur dans `core.handlers.custom_exception_handler`
-- app `accounts` ajoutee a `INSTALLED_APPS`
-
-## Gestion des erreurs
-
-Les exceptions metier reutilisables sont dans [core/exceptions.py](core/exceptions.py).
-
-Le handler global DRF est dans [core/handlers.py](core/handlers.py).
-
-## Dependances ajoutees
-
-La dependance suivante a ete ajoutee dans [requirements.txt](requirements.txt):
-
-- `django-ratelimit`
+| Tâche | Déclencheur |
+|-------|-------------|
+| Exports Excel/PDF | Endpoints export (`job_id`) |
+| Relances factures | Beat quotidien 8h (paliers 7/15/30 j) |
+| Suspension parents inactifs | Beat annuel 1er septembre |
+| Notifications email | Absences, bulletins, credentials, suspension |
 
 ## Tests
 
-Des tests API cibles ont ete ajoutes dans [accounts/tests.py](accounts/tests.py).
+Environnement **Anaconda base** uniquement :
 
-Ils couvrent:
+```bash
+cd backend
+/home/atangana/anaconda3/bin/python manage.py test -v 2
+```
 
-- login
-- refresh
-- logout
-- change-password
-- service d'auth avec tokens JWT reels
+Modules couverts : `accounts`, `students`, `attendance`, `grades`, `finance`, `parents`, `core`, `classes`, `reports`.
 
-Les tests utilisent des mocks pour isoler Appwrite et verifier le comportement de chaque endpoint sans backend externe.
+### Tests d'intégration Appwrite Cloud
+
+Guide complet : [docs/appwrite-integration-tests.md](docs/appwrite-integration-tests.md)
+
+```bash
+# Vérifier la connexion
+/home/atangana/anaconda3/bin/python manage.py verify_appwrite
+
+# Tests live (ignorés si .env contient des placeholders)
+/home/atangana/anaconda3/bin/python manage.py test core.tests_appwrite_integration -v 2
+```
 
 ## Commandes utiles
 
-### Activation de l'environnement Anaconda
-
 ```bash
+# Activer conda base
 source /home/atangana/anaconda3/etc/profile.d/conda.sh
 conda activate base
-```
 
-### Lancer les tests cibles
+# Vérifier la config Django
+/home/atangana/anaconda3/bin/python manage.py check
 
-```bash
-/home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output python manage.py test accounts.tests.AuthApiTests -v 2
-```
-
-### Lancer tous les tests
-
-```bash
-/home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output python manage.py test -v 2
-```
-
-### Demarrer le serveur Django
-
-```bash
-/home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output python manage.py runserver
-```
-
-### Verifier les erreurs Python / Django
-
-```bash
-/home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output python manage.py check
-```
-
-### Installer les dependances
-
-```bash
-/home/atangana/anaconda3/bin/conda run -p /home/atangana/anaconda3 --no-capture-output pip install -r requirements.txt
+# Démarrer le serveur
+/home/atangana/anaconda3/bin/python manage.py runserver
 ```
 
 ## Variables d'environnement
 
-Variables attendues par la configuration:
+Copier `.env.example` vers `.env` et renseigner les valeurs Appwrite, Redis et email.
 
 ```env
-SECRET_KEY=
-DEBUG=False
-ALLOWED_HOSTS=
-CORS_ALLOWED_ORIGINS=
-
-APPWRITE_ENDPOINT=http://localhost/v1
+APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
 APPWRITE_PROJECT_ID=
 APPWRITE_API_KEY=
 APPWRITE_DB_ID=sgep_db
-
-REDIS_URL=redis://redis:6380/0
-CELERY_BROKER_URL=redis://redis:6380/1
-
-EMAIL_HOST=
-EMAIL_PORT=587
-EMAIL_HOST_USER=
-EMAIL_HOST_PASSWORD=
-DEFAULT_FROM_EMAIL=
-
-JWT_ACCESS_TOKEN_LIFETIME=900
-JWT_REFRESH_TOKEN_LIFETIME=604800
 ```
 
-## Notes d'implementation
+## Références
 
-- Le code source du backend utilise la structure reelle `accounts/` a la racine du depot.
-- La persistance metier ne passe pas par `django.contrib.auth` ni par l'ORM SQL de Django.
-- Simple JWT sert uniquement a produire et valider les tokens.
-- Appwrite stocke les users et la blacklist des refresh tokens.
+- [AGENT.md](AGENT.md) — règles d'architecture et conventions
+- [PROMPTS.md](PROMPTS.md) — phases d'implémentation

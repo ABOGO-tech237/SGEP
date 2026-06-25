@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { DJANGO_TOKEN_COOKIE } from "@/lib/auth/constants";
+import { DJANGO_ACCESS_COOKIE } from "@/lib/auth/constants";
 
 const BodySchema = z.object({
   email: z.string().email(),
@@ -53,7 +53,7 @@ export async function POST(request: Request): Promise<Response> {
   const cookieStore = await cookies();
   const isProd = process.env.NODE_ENV === "production";
 
-  cookieStore.set(DJANGO_TOKEN_COOKIE, access_token, {
+  cookieStore.set(DJANGO_ACCESS_COOKIE, access_token, {
     httpOnly: true,
     secure: isProd,
     sameSite: "strict",
@@ -66,6 +66,6 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function DELETE(): Promise<Response> {
   const cookieStore = await cookies();
-  cookieStore.set(DJANGO_TOKEN_COOKIE, "", { maxAge: 0, path: "/" });
+  cookieStore.set(DJANGO_ACCESS_COOKIE, "", { maxAge: 0, path: "/" });
   return new Response(null, { status: 204 });
 }
