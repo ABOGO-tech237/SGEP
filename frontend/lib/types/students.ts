@@ -34,7 +34,7 @@ export interface StudentsListResponse {
 export const StudentCreateSchema = z.object({
   first_name: z.string().min(1, "First name is required."),
   last_name: z.string().min(1, "Last name is required."),
-  matricule: z.string().min(1, "Matricule is required."),
+  matricule: z.string().optional(),
   birth_date: z.string().min(1, "Birth date is required."),
   birth_place: z.string().min(1, "Birth place is required."),
   gender: z.string().min(1, "Gender is required."),

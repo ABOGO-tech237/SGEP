@@ -116,3 +116,22 @@ def total_of(response: Any, default: int = 0) -> int:
 	else:
 		value = getattr(response, "total", default)
 	return int(value or 0)
+
+
+def install_get_body_shim() -> None:
+	"""Stop the Appwrite SDK from sending a body on GET requests (Cloud rejects it)."""
+	from appwrite.client import Client
+
+	if getattr(Client, "_sgep_get_body_shim", False):
+		return
+
+	_original_call = Client.call
+
+	def _patched_call(self, method, path="", headers=None, params=None, response_type="json"):
+		if str(method).lower() == "get":
+			headers = dict(headers or {})
+			headers["content-type"] = ""
+		return _original_call(self, method, path, headers, params, response_type)
+
+	Client.call = _patched_call
+	Client._sgep_get_body_shim = True

@@ -67,7 +67,10 @@ export default function NewStudentPage() {
   });
 
   return (
-    <AdminShell title="Add student" description="Register a new student record">
+    <AdminShell
+      title="Enrol student"
+      description="Register a new student — the matricule is assigned automatically"
+    >
       <form
         onSubmit={handleSubmit((values) => createStudent.mutate(values))}
         className="max-w-2xl space-y-4 rounded-xl border border-border bg-card p-6"
@@ -92,12 +95,6 @@ export default function NewStudentPage() {
             <input
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               {...register("last_name")}
-            />
-          </FormField>
-          <FormField label="Matricule" name="matricule" error={errors.matricule} required>
-            <input
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              {...register("matricule")}
             />
           </FormField>
           <FormField label="Gender" name="gender" error={errors.gender} required>

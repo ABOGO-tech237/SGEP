@@ -61,6 +61,39 @@ class StudentServiceTests(SimpleTestCase):
 			with self.assertRaises(ConflictError):
 				StudentService.create(data)
 
+	def test_create_auto_generates_matricule_when_missing(self):
+		data = {
+			"first_name": "Jean",
+			"last_name": "Dupont",
+			"birth_date": "2015-01-02T00:00:00+00:00",
+			"birth_place": "Douala",
+			"gender": "M",
+			"class_id": "class-a",
+			"academic_year_id": "ay-2026",
+		}
+
+		with patch(
+			"students.services.StudentService._generate_matricule",
+			return_value="SGEP-2026-0042",
+		), patch(
+			"students.services.StudentRepository.create",
+			side_effect=lambda payload: {"id": "stu-1", **payload},
+		) as create_mock, patch("students.services.ParentAccountService.create_from_student"):
+			student = StudentService.create(data)
+
+		created_payload = create_mock.call_args[0][0]
+		self.assertEqual(created_payload["matricule"], "SGEP-2026-0042")
+		self.assertEqual(student["matricule"], "SGEP-2026-0042")
+
+	def test_generate_matricule_returns_unique_value(self):
+		with patch(
+			"students.services.StudentRepository.find_by_matricule",
+			side_effect=[{"id": "exists"}, None],
+		):
+			matricule = StudentService._generate_matricule()
+
+		self.assertRegex(matricule, r"^SGEP-\d{4}-\d{4}$")
+
 	def test_list_wraps_items_and_pagination(self):
 		with patch(
 			"students.services.StudentRepository.list",
@@ -131,6 +164,21 @@ class StudentSerializerTests(SimpleTestCase):
 			serializer = StudentCreateSerializer(data=payload, context={"student_id": "stu-1"})
 			self.assertFalse(serializer.is_valid())
 			self.assertIn("matricule", serializer.errors)
+
+	def test_student_create_serializer_accepts_missing_matricule(self):
+		payload = {
+			"first_name": "Awa",
+			"last_name": "Nana",
+			"birth_date": "2014-01-01T00:00:00+00:00",
+			"birth_place": "Yaounde",
+			"gender": "F",
+			"class_id": "class-a",
+			"academic_year_id": "ay-2026",
+		}
+
+		serializer = StudentCreateSerializer(data=payload)
+		self.assertTrue(serializer.is_valid(), serializer.errors)
+		self.assertEqual(serializer.validated_data.get("matricule"), "")
 
 
 @override_settings(MEDICAL_ENCRYPTION_KEY=Fernet.generate_key().decode())
@@ -207,6 +255,32 @@ class StudentApiTests(SimpleTestCase):
 		self.assertEqual(response.status_code, 201)
 		self.assertEqual(response.data["id"], "stu-1")
 		self.assertEqual(response.data["medical"], payload["medical"])
+
+	def test_post_students_create_without_matricule(self):
+		payload = {
+			"first_name": "Awa",
+			"last_name": "Nana",
+			"birth_date": "2014-01-01T00:00:00+00:00",
+			"birth_place": "Yaounde",
+			"gender": "F",
+			"class_id": "class-a",
+			"academic_year_id": "ay-2026",
+		}
+
+		with patch(
+			"students.views.StudentService.create",
+			return_value={
+				"id": "stu-1",
+				**payload,
+				"matricule": "SGEP-2026-0001",
+				"medical": "",
+			},
+		) as create_mock:
+			response = self.client.post("/api/v1/students/", payload, format="json")
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["matricule"], "SGEP-2026-0001")
+		create_mock.assert_called_once()
 
 	def test_promote_endpoint(self):
 		with patch(
