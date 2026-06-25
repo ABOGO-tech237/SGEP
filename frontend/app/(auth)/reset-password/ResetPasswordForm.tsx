@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -50,16 +50,20 @@ export default function ResetPasswordForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [password, setPassword] = useState("");
+
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<ResetPasswordValues>({
     resolver: zodResolver(ResetPasswordSchema),
   });
 
-  const password = watch("password", "");
+  const passwordRegister = register("password", {
+    onChange: (e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value),
+  });
+
   const strength = getPasswordStrength(password);
 
   async function onSubmit(data: ResetPasswordValues) {
@@ -108,7 +112,7 @@ export default function ResetPasswordForm({
             }
             aria-invalid={!!errors.password}
             className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive"
-            {...register("password")}
+            {...passwordRegister}
           />
           <button
             type="button"
