@@ -3,9 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { Plus } from "lucide-react";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { EnrolStudentButton } from "./EnrolStudentButton";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -76,13 +76,15 @@ export default function StudentsPageClient() {
             : "Student registry"
       }
       actions={
-        <Link
-          href="/admin/students/new"
-          className="inline-flex h-7 items-center gap-1 rounded-[min(var(--radius-md),12px)] bg-primary px-2.5 text-[0.8rem] font-medium text-primary-foreground transition hover:bg-primary/80"
-        >
-          <Plus className="size-3.5" />
-          Add student
-        </Link>
+        <div className="flex items-center gap-2">
+          <EnrolStudentButton />
+          <Link
+            href="/admin/students/new"
+            className="inline-flex h-7 items-center rounded-[min(var(--radius-md),12px)] border border-input bg-background px-2.5 text-[0.8rem] font-medium transition hover:bg-muted"
+          >
+            Full form
+          </Link>
+        </div>
       }
     >
       {error ? (
