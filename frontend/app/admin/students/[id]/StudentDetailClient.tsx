@@ -9,8 +9,10 @@ import { FormField } from "@/components/ui/FormField";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
-  StudentCreateSchema,
-  type StudentCreateValues,
+  CreateStudentSchema,
+  type CreateStudentFormValues,
+  StudentPromoteSchema,
+  type StudentPromoteValues,
   type StudentDetail,
 } from "@/lib/types/students";
 
@@ -37,6 +39,8 @@ export function StudentDetailClient({ student }: Props) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [promoteSuccess, setPromoteSuccess] = useState(false);
 
   const {
     register,
@@ -44,8 +48,8 @@ export function StudentDetailClient({ student }: Props) {
     reset,
     control,
     formState: { errors, isSubmitting },
-  } = useForm<StudentCreateValues>({
-    resolver: zodResolver(StudentCreateSchema),
+  } = useForm<CreateStudentFormValues>({
+    resolver: zodResolver(CreateStudentSchema),
     defaultValues: {
       first_name: student.first_name,
       last_name: student.last_name,
@@ -59,15 +63,23 @@ export function StudentDetailClient({ student }: Props) {
     },
   });
 
+  const {
+    register: registerPromote,
+    handleSubmit: handlePromoteSubmit,
+    formState: { errors: promoteErrors, isSubmitting: isPromoting },
+  } = useForm<StudentPromoteValues>({
+    resolver: zodResolver(StudentPromoteSchema),
+  });
+
   function handleEditClose() {
     reset();
     setServerError(null);
     setEditOpen(false);
   }
 
-  async function onSubmit(data: StudentCreateValues) {
+  async function onSubmit(data: CreateStudentFormValues) {
     setServerError(null);
-    const res = await fetch(`/api/students/${student.id}`, {
+    const res = await fetch(`/api/admin/students/${student.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -83,11 +95,31 @@ export function StudentDetailClient({ student }: Props) {
     startTransition(() => router.refresh());
   }
 
+  async function onPromote(data: StudentPromoteValues) {
+    setPromoteError(null);
+    setPromoteSuccess(false);
+
+    const res = await fetch(`/api/admin/students/${student.id}/promote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+      const body: unknown = await res.json().catch(() => ({}));
+      setPromoteError(extractError(body, "Failed to promote student."));
+      return;
+    }
+
+    setPromoteSuccess(true);
+    startTransition(() => router.refresh());
+  }
+
   async function handleDelete() {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const res = await fetch(`/api/students/${student.id}`, {
+      const res = await fetch(`/api/admin/students/${student.id}`, {
         method: "DELETE",
       });
 
@@ -102,8 +134,6 @@ export function StudentDetailClient({ student }: Props) {
       setIsDeleting(false);
     }
   }
-
-  const busy = isSubmitting;
 
   return (
     <>
@@ -151,7 +181,7 @@ export function StudentDetailClient({ student }: Props) {
         </div>
       </header>
 
-      {/* Detail cards */}
+      {/* Detail cards + Promote */}
       <main className="flex-1 overflow-y-auto px-6 py-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
           <section className="rounded-xl border border-border bg-card p-5 space-y-3">
@@ -179,8 +209,50 @@ export function StudentDetailClient({ student }: Props) {
               />
             )}
           </section>
-        </div>
 
+          {/* Promote card */}
+          <section className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold">Promote</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Move the student to another class for the next level.
+              </p>
+            </div>
+
+            {promoteError && (
+              <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {promoteError}
+              </div>
+            )}
+            {promoteSuccess && (
+              <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                Student promoted successfully.
+              </div>
+            )}
+
+            <form onSubmit={handlePromoteSubmit(onPromote)} noValidate className="space-y-3">
+              <div className="space-y-1">
+                <select
+                  {...registerPromote("target_class_id")}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Select target class</option>
+                </select>
+                {promoteErrors.target_class_id && (
+                  <p className="text-xs text-destructive">{promoteErrors.target_class_id.message}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={isPromoting || promoteSuccess}
+                className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm font-semibold transition hover:bg-muted disabled:opacity-50"
+              >
+                {isPromoting ? "Promoting…" : "Promote student"}
+              </button>
+            </form>
+          </section>
+        </div>
       </main>
 
       {/* Edit modal */}
@@ -217,10 +289,7 @@ export function StudentDetailClient({ student }: Props) {
             >
               <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
                 {serverError && (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-                  >
+                  <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {serverError}
                   </div>
                 )}
@@ -267,37 +336,21 @@ export function StudentDetailClient({ student }: Props) {
                   </p>
                   <div className="grid grid-cols-2 gap-4">
                     <FormField label="Status" name="is_active">
-                      <select className={inputClass} {...register("is_active", { setValueAs: (v) => v === "true" })}>
+                      <select className={inputClass} {...register("is_active", { setValueAs: (v) => v === "true" || v === true })}>
                         <option value="true">Active</option>
                         <option value="false">Inactive</option>
                       </select>
                     </FormField>
 
-                    <FormField
-                      label="ID / Extrait number"
-                      name="id_number"
-                      error={errors.id_number}
-                    >
+                    <FormField label="ID / Extrait number" name="id_number" error={errors.id_number}>
                       <input className={inputClass} {...register("id_number")} />
                     </FormField>
 
-                    <FormField
-                      label="Class ID"
-                      name="class_id"
-                      error={errors.class_id}
-                      required
-                      description="Appwrite document ID of the class"
-                    >
+                    <FormField label="Class ID" name="class_id" error={errors.class_id} required>
                       <input className={inputClass} {...register("class_id")} />
                     </FormField>
 
-                    <FormField
-                      label="Academic year ID"
-                      name="academic_year_id"
-                      error={errors.academic_year_id}
-                      required
-                      description="Appwrite document ID of the academic year"
-                    >
+                    <FormField label="Academic year ID" name="academic_year_id" error={errors.academic_year_id} required>
                       <input className={inputClass} {...register("academic_year_id")} />
                     </FormField>
                   </div>
@@ -308,17 +361,17 @@ export function StudentDetailClient({ student }: Props) {
                 <button
                   type="button"
                   onClick={handleEditClose}
-                  disabled={busy}
+                  disabled={isSubmitting}
                   className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={busy}
+                  disabled={isSubmitting}
                   className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                 >
-                  {busy ? "Saving…" : "Save changes"}
+                  {isSubmitting ? "Saving…" : "Save changes"}
                 </button>
               </div>
             </form>

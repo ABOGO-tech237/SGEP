@@ -8,8 +8,8 @@ import { X } from "lucide-react";
 import { FormField } from "@/components/ui/FormField";
 import { DatePicker } from "@/components/ui/DatePicker";
 import {
-  StudentCreateSchema,
-  type StudentCreateValues,
+  CreateStudentSchema,
+  type CreateStudentFormValues,
 } from "@/lib/types/students";
 
 interface EnrolStudentModalProps {
@@ -39,8 +39,8 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
     reset,
     control,
     formState: { errors, isSubmitting },
-  } = useForm<StudentCreateValues>({
-    resolver: zodResolver(StudentCreateSchema),
+  } = useForm<CreateStudentFormValues>({
+    resolver: zodResolver(CreateStudentSchema),
   });
 
   function handleClose() {
@@ -49,7 +49,7 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
     onOpenChange(false);
   }
 
-  async function onSubmit(data: StudentCreateValues) {
+  async function onSubmit(data: CreateStudentFormValues) {
     setServerError(null);
 
     const res = await fetch("/api/students", {
