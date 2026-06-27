@@ -90,6 +90,11 @@ class StudentService:
         guardians = payload.pop("guardians", [])
         medical = payload.pop("medical", None)
 
+        # class_id and academic_year_id are optional at registration; assigned via /enroll/
+        for optional_field in ("class_id", "academic_year_id"):
+            if payload.get(optional_field) is None:
+                payload.pop(optional_field, None)
+
         existing = StudentRepository.find_by_matricule(payload["matricule"])
         if existing:
             raise ConflictError("Le matricule existe deja.")

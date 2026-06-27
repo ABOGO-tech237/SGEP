@@ -37,6 +37,7 @@ export const StudentsListResponseSchema = z.object({
 
 export type StudentsListResponse = z.infer<typeof StudentsListResponseSchema>;
 
+// Edit form — class/year optional (student may not yet be enrolled)
 export const CreateStudentSchema = z.object({
   first_name: z.string().min(1, "Required"),
   last_name: z.string().min(1, "Required"),
@@ -44,13 +45,29 @@ export const CreateStudentSchema = z.object({
   birth_date: z.string().min(1, "Required"),
   birth_place: z.string().min(1, "Required"),
   gender: z.enum(["M", "F"]),
-  class_id: z.string().min(1, "Required"),
-  academic_year_id: z.string().min(1, "Required"),
+  class_id: z.string().optional(),
+  academic_year_id: z.string().optional(),
   id_number: z.string().optional(),
   is_active: z.boolean().optional(),
 });
 
 export type CreateStudentFormValues = z.infer<typeof CreateStudentSchema>;
+
+// Enroll endpoint payload — both fields required
+export const EnrollStudentSchema = z.object({
+  class_id: z.string().min(1, "Required"),
+  academic_year_id: z.string().min(1, "Required"),
+});
+
+export type EnrollStudentFormValues = z.infer<typeof EnrollStudentSchema>;
+
+// Registration modal — personal info + mandatory enrollment (register → enroll in one UX flow)
+export const RegisterAndEnrollSchema = CreateStudentSchema.omit({
+  class_id: true,
+  academic_year_id: true,
+}).merge(EnrollStudentSchema);
+
+export type RegisterAndEnrollFormValues = z.infer<typeof RegisterAndEnrollSchema>;
 
 export const StudentPromoteSchema = z.object({
   target_class_id: z.string().min(1, "Please select a target class."),

@@ -152,15 +152,15 @@ export function DatePicker({
                   </option>
                 ))}
               </select>
-              <input
-                type="number"
+              <select
                 value={viewYear}
-                onChange={(e) => {
-                  const y = Number(e.target.value);
-                  if (y > 1900 && y < 2200) setViewYear(y);
-                }}
-                className="w-14 text-sm font-semibold bg-transparent border-none outline-none text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none hover:text-primary transition-colors"
-              />
+                onChange={(e) => setViewYear(Number(e.target.value))}
+                className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer hover:text-primary transition-colors"
+              >
+                {Array.from({ length: 91 }, (_, i) => 1950 + i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
             </div>
 
             <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,8 @@ import { ArrowLeft, Pencil, Trash2, X } from "lucide-react";
 import { FormField } from "@/components/ui/FormField";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import type { ClassRecord } from "@/lib/types/classes";
+import type { AcademicYearRecord } from "@/lib/types/core";
 import {
   CreateStudentSchema,
   type CreateStudentFormValues,
@@ -41,6 +43,17 @@ export function StudentDetailClient({ student }: Props) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
   const [promoteSuccess, setPromoteSuccess] = useState(false);
+  const [classes, setClasses] = useState<ClassRecord[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearRecord[]>([]);
+
+  useEffect(() => {
+    void fetch("/api/admin/classes")
+      .then((r) => r.json())
+      .then((d) => setClasses(d as ClassRecord[]));
+    void fetch("/api/admin/academic-years")
+      .then((r) => r.json())
+      .then((d) => setAcademicYears(d as AcademicYearRecord[]));
+  }, []);
 
   const {
     register,
@@ -238,6 +251,9 @@ export function StudentDetailClient({ student }: Props) {
                   defaultValue=""
                 >
                   <option value="" disabled>Select target class</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
                 </select>
                 {promoteErrors.target_class_id && (
                   <p className="text-xs text-destructive">{promoteErrors.target_class_id.message}</p>
@@ -346,12 +362,22 @@ export function StudentDetailClient({ student }: Props) {
                       <input className={inputClass} {...register("id_number")} />
                     </FormField>
 
-                    <FormField label="Class ID" name="class_id" error={errors.class_id} required>
-                      <input className={inputClass} {...register("class_id")} />
+                    <FormField label="Class" name="class_id" error={errors.class_id}>
+                      <select className={inputClass} {...register("class_id")}>
+                        <option value="">Select class…</option>
+                        {classes.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
                     </FormField>
 
-                    <FormField label="Academic year ID" name="academic_year_id" error={errors.academic_year_id} required>
-                      <input className={inputClass} {...register("academic_year_id")} />
+                    <FormField label="Academic year" name="academic_year_id" error={errors.academic_year_id}>
+                      <select className={inputClass} {...register("academic_year_id")}>
+                        <option value="">Select year…</option>
+                        {academicYears.map((y) => (
+                          <option key={y.id} value={y.id}>{y.name}</option>
+                        ))}
+                      </select>
                     </FormField>
                   </div>
                 </div>
