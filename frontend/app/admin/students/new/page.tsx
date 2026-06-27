@@ -11,8 +11,8 @@ import { FormField } from "@/components/ui/FormField";
 import type { AcademicYearRecord } from "@/lib/types/core";
 import type { ClassRecord } from "@/lib/types/classes";
 import {
-  StudentCreateSchema,
-  type StudentCreateValues,
+  CreateStudentSchema,
+  type CreateStudentFormValues,
 } from "@/lib/types/students";
 
 async function fetchClasses(): Promise<ClassRecord[]> {
@@ -39,13 +39,13 @@ export default function NewStudentPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<StudentCreateValues>({
-    resolver: zodResolver(StudentCreateSchema),
+  } = useForm<CreateStudentFormValues>({
+    resolver: zodResolver(CreateStudentSchema),
     defaultValues: { is_active: true, gender: "M" },
   });
 
   const createStudent = useMutation({
-    mutationFn: async (values: StudentCreateValues) => {
+    mutationFn: async (values: CreateStudentFormValues) => {
       const response = await fetch("/api/admin/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

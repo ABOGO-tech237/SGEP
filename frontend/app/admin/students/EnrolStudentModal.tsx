@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { FormField } from "@/components/ui/FormField";
 import { DatePicker } from "@/components/ui/DatePicker";
+import type { ClassRecord } from "@/lib/types/classes";
+import type { AcademicYearRecord } from "@/lib/types/core";
 import {
-  StudentCreateSchema,
-  type StudentCreateValues,
+  RegisterAndEnrollSchema,
+  type RegisterAndEnrollFormValues,
 } from "@/lib/types/students";
 
 interface EnrolStudentModalProps {
@@ -32,6 +34,18 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [classes, setClasses] = useState<ClassRecord[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearRecord[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    void fetch("/api/admin/classes")
+      .then((r) => r.json())
+      .then((d) => setClasses(d as ClassRecord[]));
+    void fetch("/api/admin/academic-years")
+      .then((r) => r.json())
+      .then((d) => setAcademicYears(d as AcademicYearRecord[]));
+  }, [open]);
 
   const {
     register,
@@ -39,8 +53,8 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
     reset,
     control,
     formState: { errors, isSubmitting },
-  } = useForm<StudentCreateValues>({
-    resolver: zodResolver(StudentCreateSchema),
+  } = useForm<RegisterAndEnrollFormValues>({
+    resolver: zodResolver(RegisterAndEnrollSchema),
   });
 
   function handleClose() {
@@ -49,18 +63,38 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
     onOpenChange(false);
   }
 
-  async function onSubmit(data: StudentCreateValues) {
+  async function onSubmit(data: RegisterAndEnrollFormValues) {
     setServerError(null);
 
-    const res = await fetch("/api/students", {
+    const { class_id, academic_year_id, ...registrationData } = data;
+
+    // Step 1: Register the student (no class/year)
+    const createRes = await fetch("/api/admin/students", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(registrationData),
     });
 
-    if (!res.ok) {
-      const body: unknown = await res.json().catch(() => ({}));
-      setServerError(extractError(body, "Failed to enrol student."));
+    if (!createRes.ok) {
+      const body: unknown = await createRes.json().catch(() => ({}));
+      setServerError(extractError(body, "Failed to register student."));
+      return;
+    }
+
+    const newStudent = (await createRes.json()) as { id: string };
+
+    // Step 2: Enroll the student (assign class + academic year, generates invoice)
+    const enrollRes = await fetch(`/api/admin/students/${newStudent.id}/enroll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ class_id, academic_year_id }),
+    });
+
+    if (!enrollRes.ok) {
+      const body: unknown = await enrollRes.json().catch(() => ({}));
+      setServerError(
+        extractError(body, "Student registered but enrollment failed. Please enroll from their profile."),
+      );
       return;
     }
 
@@ -161,24 +195,22 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
               Enrollment
             </p>
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                label="Class ID"
-                name="class_id"
-                error={errors.class_id}
-                required
-                description="Appwrite document ID of the class"
-              >
-                <input className={inputClass} {...register("class_id")} />
+              <FormField label="Class" name="class_id" error={errors.class_id} required>
+                <select className={inputClass} {...register("class_id")}>
+                  <option value="">Select class…</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </FormField>
 
-              <FormField
-                label="Academic year ID"
-                name="academic_year_id"
-                error={errors.academic_year_id}
-                required
-                description="Appwrite document ID of the academic year"
-              >
-                <input className={inputClass} {...register("academic_year_id")} />
+              <FormField label="Academic year" name="academic_year_id" error={errors.academic_year_id} required>
+                <select className={inputClass} {...register("academic_year_id")}>
+                  <option value="">Select year…</option>
+                  {academicYears.map((y) => (
+                    <option key={y.id} value={y.id}>{y.name}</option>
+                  ))}
+                </select>
               </FormField>
 
               <FormField

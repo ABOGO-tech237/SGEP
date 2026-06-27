@@ -14,7 +14,16 @@ export async function proxyJsonResponse(
       return new Response(null, { status: 204 });
     }
 
-    const body = text ? (JSON.parse(text) as unknown) : null;
+    let body: unknown;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      console.error("[proxyJsonResponse] non-JSON from backend:", text.slice(0, 500));
+      return NextResponse.json(
+        { error: "The backend returned an unexpected response." },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(body, { status: response.status });
   } catch (error) {
     if (error instanceof ApiError) {

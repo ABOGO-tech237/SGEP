@@ -12,7 +12,7 @@ async function readBody(res: Response): Promise<unknown> {
 export async function GET(_request: NextRequest, { params }: Params): Promise<Response> {
   try {
     const { id } = await params;
-    const res = await djangoFetch(`/api/v1/students/${id}/`);
+    const res = await djangoFetch(`/students/${id}/`);
     const data = await readBody(res);
     if (data === null) return new Response(null, { status: res.status });
     return Response.json(data, { status: res.status });
@@ -28,7 +28,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<R
   try {
     const { id } = await params;
     const body: unknown = await request.json();
-    const res = await djangoFetch(`/api/v1/students/${id}/`, {
+    const res = await djangoFetch(`/students/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(body),
     });
@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: Params): Promise<R
 export async function DELETE(_request: NextRequest, { params }: Params): Promise<Response> {
   try {
     const { id } = await params;
-    const res = await djangoFetch(`/api/v1/students/${id}/`, {
+    const res = await djangoFetch(`/students/${id}/`, {
       method: "DELETE",
     });
     const data = await readBody(res);
