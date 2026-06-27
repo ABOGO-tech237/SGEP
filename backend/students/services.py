@@ -95,6 +95,11 @@ class StudentService:
             if payload.get(optional_field) is None:
                 payload.pop(optional_field, None)
 
+        # Auto-generate matricule when not provided
+        if not payload.get("matricule"):
+            year = datetime.now(timezone.utc).strftime("%y")
+            payload["matricule"] = f"STU-{year}-{StudentService.generate_temp_code(6).upper()}"
+
         existing = StudentRepository.find_by_matricule(payload["matricule"])
         if existing:
             raise ConflictError("Le matricule existe deja.")

@@ -79,7 +79,7 @@ class StudentListSerializer(serializers.Serializer):
 class StudentCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(max_length=100)
-    matricule = serializers.CharField(max_length=50)
+    matricule = serializers.CharField(max_length=50, required=False, allow_blank=True)
     birth_date = serializers.CharField()
     birth_place = serializers.CharField(max_length=100)
     gender = serializers.CharField(max_length=10)
