@@ -79,22 +79,19 @@ class StudentListSerializer(serializers.Serializer):
 class StudentCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(max_length=100)
-    matricule = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    matricule = serializers.CharField(max_length=50, required=False, allow_blank=True)
     birth_date = serializers.CharField()
     birth_place = serializers.CharField(max_length=100)
     gender = serializers.CharField(max_length=10)
     id_number = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
-    class_id = serializers.CharField(max_length=36)
-    academic_year_id = serializers.CharField(max_length=36)
+    class_id = serializers.CharField(max_length=36, required=False, allow_blank=True, allow_null=True)
+    academic_year_id = serializers.CharField(max_length=36, required=False, allow_blank=True, allow_null=True)
     school_id = serializers.CharField(max_length=36, required=False, allow_blank=True, allow_null=True)
     is_active = serializers.BooleanField(required=False)
     medical = serializers.JSONField(required=False, allow_null=True)
     guardians = serializers.ListField(child=serializers.DictField(), required=False)
 
     def validate_matricule(self, value: str) -> str:
-        value = (value or "").strip()
-        if not value:
-            return ""
         student_id = self.context.get("student_id")
         existing = StudentRepository.find_by_matricule(value)
         if existing and existing.get("id") != student_id:
