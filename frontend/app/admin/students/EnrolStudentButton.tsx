@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { UserPlus } from "lucide-react";
-
 import { EnrolStudentModal } from "./EnrolStudentModal";
 
 export function EnrolStudentButton() {
@@ -11,9 +10,8 @@ export function EnrolStudentButton() {
   return (
     <>
       <button
-        type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-7 items-center gap-1 rounded-[min(var(--radius-md),12px)] bg-primary px-2.5 text-[0.8rem] font-medium text-primary-foreground transition hover:bg-primary/80"
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
       >
         <UserPlus className="size-3.5" />
         Enrol student

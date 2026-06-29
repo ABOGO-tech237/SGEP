@@ -26,7 +26,7 @@ class AppwriteJWTAuthenticationScheme(OpenApiAuthenticationExtension):
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 
 from accounts.serializers import ChangePasswordSerializer, LoginSerializer, LogoutSerializer, RefreshSerializer
-from accounts.views import ChangePasswordView, LoginView, LogoutView, RefreshTokenView
+from accounts.views import AdminDashboardView, ChangePasswordView, LoginView, LogoutView, RefreshTokenView
 from attendance.serializers import (
 	AttendanceCreateSerializer,
 	AttendanceSerializer,
@@ -43,27 +43,36 @@ from attendance.views import (
 )
 from core.openapi_serializers import (
 	AccessTokenResponseSerializer,
+	AdminDashboardAccountsResponseSerializer,
+	ApiErrorResponseSerializer,
 	FinanceDashboardResponseSerializer,
 	InvoiceGenerateResponseSerializer,
 	JobIdResponseSerializer,
 	MessageResponseSerializer,
 	ParentProfileResponseSerializer,
-	ParentMessageCreateSerializer,
 	ReportCardStatusResponseSerializer,
 	ReportJobStatusResponseSerializer,
+	StudentCreateRequestSerializer,
+	StudentHistoryResponseSerializer,
+	StudentListPaginatedResponseSerializer,
 	TokenResponseSerializer,
 )
 from classes.serializers import ClassSerializer, SubjectSerializer
 from classes.views import ClassDetailView, ClassListCreateView, SubjectDetailView, SubjectListCreateView
-from core.serializers import AcademicYearSerializer, AdminDashboardResponseSerializer, SchoolSerializer
+from core.serializers import AcademicYearSerializer, SchoolSerializer
 from core.views import (
 	AcademicYearDetailView,
 	AcademicYearListCreateView,
-	AdminDashboardView,
 	SchoolDetailView,
 	SchoolListCreateView,
 )
-from finance.serializers import InvoiceGenerateSerializer, InvoiceSerializer, PaymentCreateSerializer, PaymentSerializer
+from finance.serializers import (
+	InvoiceGenerateSerializer,
+	InvoicePlannedPaymentSerializer,
+	InvoiceSerializer,
+	PaymentCreateSerializer,
+	PaymentSerializer,
+)
 from finance.views import (
 	FinanceDashboardView,
 	FinanceExportExcelView,
@@ -90,10 +99,11 @@ from grades.views import (
 	ReportCardPublishView,
 	ReportCardStatusView,
 )
-from parents.serializers import ParentMessageSerializer
+from parents.serializers import ParentMessageCreateSerializer, ParentMessageSerializer
 from parents.views import (
 	ParentAttendanceView,
 	ParentGradesView,
+	ParentInvoicePlannedPaymentView,
 	ParentInvoiceReceiptView,
 	ParentInvoicesView,
 	ParentMeView,
@@ -105,7 +115,6 @@ from parents.views import (
 from students.serializers import (
 	StudentCreateSerializer,
 	StudentEnrollSerializer,
-	StudentListSerializer,
 	StudentPromoteSerializer,
 	StudentSerializer,
 )
@@ -168,21 +177,27 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Students"],
 		summary="Lister les élèves",
+		description="Rôle requis : superadmin.",
 		parameters=[
 			OpenApiParameter("class_id", str, OpenApiParameter.QUERY),
 			OpenApiParameter("academic_year_id", str, OpenApiParameter.QUERY),
-			OpenApiParameter("is_active", bool, OpenApiParameter.QUERY),
+			OpenApiParameter("is_active", str, OpenApiParameter.QUERY, description='Filtrer : "true" ou "false".'),
 			OpenApiParameter("search", str, OpenApiParameter.QUERY),
 			OpenApiParameter("page", int, OpenApiParameter.QUERY),
 			OpenApiParameter("page_size", int, OpenApiParameter.QUERY),
 		],
-		responses={200: StudentListSerializer(many=True)},
+		responses={200: StudentListPaginatedResponseSerializer},
 	),
 	post=extend_schema(
 		tags=["Students"],
 		summary="Créer un élève",
-		request=StudentCreateSerializer,
-		responses={201: StudentSerializer},
+		description=(
+			"Rôle requis : superadmin. Le matricule est requis dans le schéma Swagger ; "
+			"s'il est omis ou vide, le serveur en génère un (STU-AA-XXXXXX). "
+			"Les tuteurs (`guardians`) déclenchent la création du compte parent."
+		),
+		request=StudentCreateRequestSerializer,
+		responses={201: StudentSerializer, 400: ApiErrorResponseSerializer, 409: ApiErrorResponseSerializer},
 	),
 )(StudentListCreateView)
 
@@ -201,7 +216,7 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Students"],
 		summary="Historique élève",
-		responses={200: OpenApiResponse(description="Historique des événements de l'élève")},
+		responses={200: StudentHistoryResponseSerializer, 404: ApiErrorResponseSerializer},
 	),
 )(StudentHistoryView)
 
@@ -224,11 +239,27 @@ extend_schema_view(
 )(StudentPromoteView)
 
 extend_schema_view(
-	get=extend_schema(tags=["Students"], summary="Exporter les élèves en PDF", responses={202: JobIdResponseSerializer}),
+	get=extend_schema(
+		tags=["Students"],
+		summary="Exporter les élèves en PDF",
+		parameters=[
+			OpenApiParameter("academic_year_id", str, OpenApiParameter.QUERY),
+			OpenApiParameter("class_id", str, OpenApiParameter.QUERY),
+		],
+		responses={202: JobIdResponseSerializer},
+	),
 )(StudentExportPDFView)
 
 extend_schema_view(
-	get=extend_schema(tags=["Students"], summary="Exporter les élèves en Excel", responses={202: JobIdResponseSerializer}),
+	get=extend_schema(
+		tags=["Students"],
+		summary="Exporter les élèves en Excel",
+		parameters=[
+			OpenApiParameter("academic_year_id", str, OpenApiParameter.QUERY),
+			OpenApiParameter("class_id", str, OpenApiParameter.QUERY),
+		],
+		responses={202: JobIdResponseSerializer},
+	),
 )(StudentExportExcelView)
 
 # --- Attendance ---
@@ -288,8 +319,13 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Attendance"],
 		summary="Exporter les absences",
-		parameters=[OpenApiParameter("format", str, OpenApiParameter.QUERY, description="pdf ou excel")],
-		responses={202: JobIdResponseSerializer},
+		parameters=[
+			OpenApiParameter("format", str, OpenApiParameter.QUERY, description="pdf ou excel (défaut : excel)"),
+			OpenApiParameter("class_id", str, OpenApiParameter.QUERY),
+			OpenApiParameter("date_from", str, OpenApiParameter.QUERY, description="ISO datetime"),
+			OpenApiParameter("date_to", str, OpenApiParameter.QUERY, description="ISO datetime"),
+		],
+		responses={202: JobIdResponseSerializer, 400: MessageResponseSerializer},
 	),
 )(AttendanceExportView)
 
@@ -318,6 +354,7 @@ extend_schema_view(
 	put=extend_schema(
 		tags=["Grades"],
 		summary="Modifier une note",
+		description="Mise à jour partielle acceptée.",
 		request=GradeCreateSerializer,
 		responses={200: GradeSerializer},
 	),
@@ -340,7 +377,7 @@ extend_schema_view(
 			OpenApiParameter("class_id", str, OpenApiParameter.QUERY, required=True),
 			OpenApiParameter("period_id", str, OpenApiParameter.QUERY, required=True),
 		],
-		responses={202: JobIdResponseSerializer},
+		responses={202: JobIdResponseSerializer, 404: ApiErrorResponseSerializer},
 	),
 )(GradeResultsExportView)
 
@@ -359,6 +396,7 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Report Cards"],
 		summary="Statut de génération des bulletins",
+		description="Le paramètre `pk` est l'ID du job de génération.",
 		responses={200: ReportCardStatusResponseSerializer},
 	),
 )(ReportCardStatusView)
@@ -367,7 +405,12 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Report Cards"],
 		summary="Télécharger un bulletin PDF",
-		responses={(200, "application/pdf"): OpenApiResponse(description="Fichier PDF")},
+		description="Accessible au superadmin ou au parent actif (bulletin de son enfant).",
+		responses={
+			(200, "application/pdf"): OpenApiResponse(description="Fichier PDF"),
+			403: ApiErrorResponseSerializer,
+			404: ApiErrorResponseSerializer,
+		},
 	),
 )(ReportCardDownloadView)
 
@@ -418,7 +461,8 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Finance"],
 		summary="Télécharger le reçu de paiement",
-		responses={(200, "application/pdf"): OpenApiResponse(description="Reçu PDF ou HTML")},
+		description="Rôle requis : comptable ou superadmin.",
+		responses={200: OpenApiResponse(description="Reçu PDF ou HTML"), 404: MessageResponseSerializer},
 	),
 )(FinancePaymentReceiptView)
 
@@ -435,7 +479,12 @@ extend_schema_view(
 )(FinanceDashboardView)
 
 extend_schema_view(
-	get=extend_schema(tags=["Finance"], summary="Exporter la finance en Excel", responses={202: JobIdResponseSerializer}),
+	get=extend_schema(
+		tags=["Finance"],
+		summary="Exporter la finance en Excel",
+		parameters=[OpenApiParameter("academic_year_id", str, OpenApiParameter.QUERY)],
+		responses={202: JobIdResponseSerializer},
+	),
 )(FinanceExportExcelView)
 
 # --- Parent portal ---
@@ -444,18 +493,25 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Profil parent",
+		description="Rôle parent (actif ou suspendu).",
 		responses={200: ParentProfileResponseSerializer},
 	),
 )(ParentMeView)
 
 extend_schema_view(
-	get=extend_schema(tags=["Parent Portal"], summary="Informations de l'élève lié", responses={200: StudentSerializer}),
+	get=extend_schema(
+		tags=["Parent Portal"],
+		summary="Informations de l'élève lié",
+		description="Rôle parent actif.",
+		responses={200: StudentSerializer, 403: ApiErrorResponseSerializer, 404: ApiErrorResponseSerializer},
+	),
 )(ParentStudentView)
 
 extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Notes de l'élève",
+		description="Rôle parent actif.",
 		parameters=[OpenApiParameter("period_id", str, OpenApiParameter.QUERY)],
 		responses={200: GradeSerializer(many=True)},
 	),
@@ -465,6 +521,7 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Absences de l'élève",
+		description="Rôle parent actif.",
 		responses={200: AttendanceSerializer(many=True)},
 	),
 )(ParentAttendanceView)
@@ -489,15 +546,27 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Factures de l'élève",
+		description="Rôle parent (actif ou suspendu).",
 		responses={200: InvoiceSerializer(many=True)},
 	),
 )(ParentInvoicesView)
 
 extend_schema_view(
+	patch=extend_schema(
+		tags=["Parent Portal"],
+		summary="Date de paiement prévue",
+		description="Rôle parent. Aucune relance avant la date indiquée.",
+		request=InvoicePlannedPaymentSerializer,
+		responses={200: InvoiceSerializer, 404: ApiErrorResponseSerializer},
+	),
+)(ParentInvoicePlannedPaymentView)
+
+extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Reçu de paiement (parent)",
-		responses={(200, "application/pdf"): OpenApiResponse(description="Reçu PDF ou HTML")},
+		description="Le paramètre `pk` est l'ID du paiement.",
+		responses={200: OpenApiResponse(description="Reçu PDF ou HTML"), 404: ApiErrorResponseSerializer},
 	),
 )(ParentInvoiceReceiptView)
 
@@ -505,11 +574,13 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Parent Portal"],
 		summary="Messagerie — liste",
+		description="Rôle parent actif.",
 		responses={200: ParentMessageSerializer(many=True)},
 	),
 	post=extend_schema(
 		tags=["Parent Portal"],
 		summary="Messagerie — envoyer",
+		description="Rôle parent actif.",
 		request=ParentMessageCreateSerializer,
 		responses={201: ParentMessageSerializer},
 	),
@@ -623,7 +694,8 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Reports"],
 		summary="Statut d'un export asynchrone",
-		responses={200: ReportJobStatusResponseSerializer},
+		description="Rôle requis : superadmin ou comptable.",
+		responses={200: ReportJobStatusResponseSerializer, 404: ApiErrorResponseSerializer},
 	),
 )(ReportJobStatusView)
 
@@ -631,7 +703,8 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Reports"],
 		summary="Télécharger un export asynchrone",
-		responses={(200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"): OpenApiResponse(description="Fichier Excel ou PDF")},
+		description="Fichier Excel ou PDF selon le type de job.",
+		responses={200: OpenApiResponse(description="Fichier Excel ou PDF"), 404: ApiErrorResponseSerializer},
 	),
 )(ReportJobDownloadView)
 
@@ -641,7 +714,7 @@ extend_schema_view(
 	get=extend_schema(
 		tags=["Admin"],
 		summary="Tableau de bord administrateur",
-		description="Statistiques élèves, classes, finance et activité récente depuis Appwrite.",
-		responses={200: AdminDashboardResponseSerializer},
+		description="Statistiques des comptes utilisateurs. Rôle requis : superadmin.",
+		responses={200: AdminDashboardAccountsResponseSerializer},
 	),
 )(AdminDashboardView)

@@ -1,61 +1,76 @@
 import { z } from "zod";
 
-export interface StudentListItem {
-  id: string;
-  matricule: string;
-  first_name: string;
-  last_name: string;
-  class_id?: string | null;
-  academic_year_id?: string | null;
-  is_active?: boolean;
-}
-
-export interface StudentDetail extends StudentListItem {
-  birth_date: string;
-  birth_place: string;
-  gender: string;
-  id_number?: string | null;
-  school_id?: string | null;
-  is_deleted?: boolean;
-  medical?: Record<string, unknown> | null;
-  history?: Array<Record<string, unknown>>;
-  created_at?: string;
-  updated_at?: string;
-  deleted_at?: string | null;
-}
-
-export interface StudentsListResponse {
-  items: StudentListItem[];
-  total: number;
-  page: number;
-  page_size: number;
-}
-
-export const StudentCreateSchema = z.object({
-  first_name: z.string().min(1, "First name is required."),
-  last_name: z.string().min(1, "Last name is required."),
-  matricule: z.string().optional(),
-  birth_date: z.string().min(1, "Birth date is required."),
-  birth_place: z.string().min(1, "Birth place is required."),
-  gender: z.string().min(1, "Gender is required."),
-  id_number: z.string().optional(),
-  class_id: z.string().min(1, "Class is required."),
-  academic_year_id: z.string().min(1, "Academic year is required."),
-  school_id: z.string().optional(),
+export const StudentListItemSchema = z.object({
+  id: z.string(),
+  matricule: z.string(),
+  first_name: z.string(),
+  last_name: z.string(),
+  class_id: z.string().nullable().optional(),
+  academic_year_id: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
 });
 
-export type StudentCreateValues = z.infer<typeof StudentCreateSchema>;
+export type StudentListItem = z.infer<typeof StudentListItemSchema>;
 
-export const StudentEnrollSchema = z.object({
-  class_id: z.string().min(1, "Class is required."),
-  academic_year_id: z.string().min(1, "Academic year is required."),
+export const StudentDetailSchema = StudentListItemSchema.extend({
+  birth_date: z.string(),
+  birth_place: z.string(),
+  gender: z.string(),
+  id_number: z.string().nullable().optional(),
+  school_id: z.string().nullable().optional(),
+  is_deleted: z.boolean().optional(),
+  medical: z.record(z.string(), z.unknown()).nullable().optional(),
+  history: z.array(z.record(z.string(), z.unknown())).optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  deleted_at: z.string().nullable().optional(),
 });
 
-export type StudentEnrollValues = z.infer<typeof StudentEnrollSchema>;
+export type StudentDetail = z.infer<typeof StudentDetailSchema>;
+
+export const StudentsListResponseSchema = z.object({
+  items: z.array(StudentListItemSchema),
+  total: z.number(),
+  page: z.number(),
+  page_size: z.number(),
+});
+
+export type StudentsListResponse = z.infer<typeof StudentsListResponseSchema>;
+
+// Edit form — class/year optional (student may not yet be enrolled)
+export const CreateStudentSchema = z.object({
+  first_name: z.string().min(1, "Required"),
+  last_name: z.string().min(1, "Required"),
+  matricule: z.string().optional(),
+  birth_date: z.string().min(1, "Required"),
+  birth_place: z.string().min(1, "Required"),
+  gender: z.enum(["M", "F"]),
+  class_id: z.string().optional(),
+  academic_year_id: z.string().optional(),
+  id_number: z.string().optional(),
+  is_active: z.boolean().optional(),
+});
+
+export type CreateStudentFormValues = z.infer<typeof CreateStudentSchema>;
+
+// Enroll endpoint payload — both fields required
+export const EnrollStudentSchema = z.object({
+  class_id: z.string().min(1, "Required"),
+  academic_year_id: z.string().min(1, "Required"),
+});
+
+export type EnrollStudentFormValues = z.infer<typeof EnrollStudentSchema>;
+
+// Registration modal — personal info + mandatory enrollment (register → enroll in one UX flow)
+export const RegisterAndEnrollSchema = CreateStudentSchema.omit({
+  class_id: true,
+  academic_year_id: true,
+}).merge(EnrollStudentSchema);
+
+export type RegisterAndEnrollFormValues = z.infer<typeof RegisterAndEnrollSchema>;
 
 export const StudentPromoteSchema = z.object({
-  target_class_id: z.string().min(1, "Target class is required."),
+  target_class_id: z.string().min(1, "Please select a target class."),
 });
 
 export type StudentPromoteValues = z.infer<typeof StudentPromoteSchema>;

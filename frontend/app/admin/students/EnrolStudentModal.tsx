@@ -1,18 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState, useTransition } from "react";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/FormField";
-import type { AcademicYearRecord } from "@/lib/types/core";
+import { DatePicker } from "@/components/ui/DatePicker";
 import type { ClassRecord } from "@/lib/types/classes";
+import type { AcademicYearRecord } from "@/lib/types/core";
 import {
-  StudentCreateSchema,
-  type StudentCreateValues,
+  RegisterAndEnrollSchema,
+  type RegisterAndEnrollFormValues,
 } from "@/lib/types/students";
 
 interface EnrolStudentModalProps {
@@ -21,78 +20,91 @@ interface EnrolStudentModalProps {
 }
 
 const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring aria-invalid:border-destructive";
 
-async function fetchClasses(): Promise<ClassRecord[]> {
-  const response = await fetch("/api/admin/classes");
-  if (!response.ok) throw new Error("Unable to load classes.");
-  return (await response.json()) as ClassRecord[];
-}
-
-async function fetchAcademicYears(): Promise<AcademicYearRecord[]> {
-  const response = await fetch("/api/admin/academic-years");
-  if (!response.ok) throw new Error("Unable to load academic years.");
-  return (await response.json()) as AcademicYearRecord[];
+function extractError(body: unknown, fallback: string): string {
+  if (typeof body !== "object" || body === null) return fallback;
+  const b = body as Record<string, unknown>;
+  const candidate = b.detail ?? b.error ?? b.message;
+  if (typeof candidate === "string") return candidate;
+  return fallback;
 }
 
 export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps) {
-  const queryClient = useQueryClient();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [classes, setClasses] = useState<ClassRecord[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearRecord[]>([]);
 
-  const classesQuery = useQuery({
-    queryKey: ["admin", "classes"],
-    queryFn: fetchClasses,
-    enabled: open,
-  });
-  const yearsQuery = useQuery({
-    queryKey: ["admin", "academic-years"],
-    queryFn: fetchAcademicYears,
-    enabled: open,
-  });
+  useEffect(() => {
+    if (!open) return;
+    void fetch("/api/admin/classes")
+      .then((r) => r.json())
+      .then((d) => setClasses(d as ClassRecord[]));
+    void fetch("/api/admin/academic-years")
+      .then((r) => r.json())
+      .then((d) => setAcademicYears(d as AcademicYearRecord[]));
+  }, [open]);
 
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
-  } = useForm<StudentCreateValues>({
-    resolver: zodResolver(StudentCreateSchema),
-    defaultValues: { is_active: true, gender: "M" },
-  });
-
-  const createStudent = useMutation({
-    mutationFn: async (values: StudentCreateValues) => {
-      const response = await fetch("/api/admin/students", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Unable to enrol student.");
-      }
-      return payload;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
-      reset({ is_active: true, gender: "M" });
-      setServerError(null);
-      onOpenChange(false);
-    },
-    onError: (error) => {
-      setServerError(error instanceof Error ? error.message : "Unable to enrol student.");
-    },
+  } = useForm<RegisterAndEnrollFormValues>({
+    resolver: zodResolver(RegisterAndEnrollSchema),
   });
 
   function handleClose() {
-    reset({ is_active: true, gender: "M" });
+    reset();
     setServerError(null);
     onOpenChange(false);
   }
 
+  async function onSubmit(data: RegisterAndEnrollFormValues) {
+    setServerError(null);
+
+    const { class_id, academic_year_id, ...registrationData } = data;
+
+    // Step 1: Register the student (no class/year)
+    const createRes = await fetch("/api/admin/students", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(registrationData),
+    });
+
+    if (!createRes.ok) {
+      const body: unknown = await createRes.json().catch(() => ({}));
+      setServerError(extractError(body, "Failed to register student."));
+      return;
+    }
+
+    const newStudent = (await createRes.json()) as { id: string };
+
+    // Step 2: Enroll the student (assign class + academic year, generates invoice)
+    const enrollRes = await fetch(`/api/admin/students/${newStudent.id}/enroll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ class_id, academic_year_id }),
+    });
+
+    if (!enrollRes.ok) {
+      const body: unknown = await enrollRes.json().catch(() => ({}));
+      setServerError(
+        extractError(body, "Student registered but enrollment failed. Please enroll from their profile."),
+      );
+      return;
+    }
+
+    handleClose();
+    startTransition(() => router.refresh());
+  }
+
   if (!open) return null;
 
-  const busy = isSubmitting || createStudent.isPending;
+  const busy = isSubmitting || isPending;
 
   return (
     <div
@@ -101,105 +113,134 @@ export function EnrolStudentModal({ open, onOpenChange }: EnrolStudentModalProps
       aria-labelledby="enrol-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} aria-hidden />
-      <div className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={handleClose}
+        aria-hidden
+      />
+      <div className="relative z-10 w-full max-w-2xl rounded-xl border border-border bg-card shadow-xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div>
             <h2 id="enrol-modal-title" className="text-base font-semibold">
               Enrol new student
             </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Enter enrollment details — the matricule is assigned automatically
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Fill in the student&apos;s information below
             </p>
           </div>
           <button
-            type="button"
             aria-label="Close"
             onClick={handleClose}
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit((values) => createStudent.mutate(values))}
-          noValidate
-          className="flex flex-1 flex-col overflow-hidden"
-        >
-          <div className="flex-1 overflow-y-auto px-6 py-5">
-            {serverError ? (
+        {/* Body */}
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-6 py-5 overflow-y-auto flex-1">
+            {serverError && (
               <div
                 role="alert"
                 className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
               >
                 {serverError}
               </div>
-            ) : null}
+            )}
 
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {/* Section: Personal */}
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               Personal information
             </p>
-            <div className="mb-6 grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4 mb-6">
               <FormField label="First name" name="first_name" error={errors.first_name} required>
-                <input className={inputClass} autoComplete="off" {...register("first_name")} />
+                <input className={inputClass} {...register("first_name")} />
               </FormField>
+
               <FormField label="Last name" name="last_name" error={errors.last_name} required>
-                <input className={inputClass} autoComplete="off" {...register("last_name")} />
+                <input className={inputClass} {...register("last_name")} />
               </FormField>
+
               <FormField label="Gender" name="gender" error={errors.gender} required>
                 <select className={inputClass} {...register("gender")}>
+                  <option value="">Select…</option>
                   <option value="M">Male</option>
                   <option value="F">Female</option>
                 </select>
               </FormField>
-              <FormField label="Birth date" name="birth_date" error={errors.birth_date} required>
-                <input type="date" className={inputClass} {...register("birth_date")} />
+
+              <FormField label="Date of birth" name="birth_date" error={errors.birth_date} required>
+                <Controller
+                  name="birth_date"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Pick a date"
+                    />
+                  )}
+                />
               </FormField>
-              <FormField label="Birth place" name="birth_place" error={errors.birth_place} required>
-                <input className={inputClass} autoComplete="off" {...register("birth_place")} />
+
+              <FormField label="Place of birth" name="birth_place" error={errors.birth_place} required className="col-span-2">
+                <input className={inputClass} {...register("birth_place")} />
               </FormField>
             </div>
 
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {/* Section: Enrollment */}
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               Enrollment
             </p>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Class" name="class_id" error={errors.class_id} required>
                 <select className={inputClass} {...register("class_id")}>
-                  <option value="">Select class</option>
-                  {(classesQuery.data ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
+                  <option value="">Select class…</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </FormField>
-              <FormField
-                label="Academic year"
-                name="academic_year_id"
-                error={errors.academic_year_id}
-                required
-              >
+
+              <FormField label="Academic year" name="academic_year_id" error={errors.academic_year_id} required>
                 <select className={inputClass} {...register("academic_year_id")}>
-                  <option value="">Select year</option>
-                  {(yearsQuery.data ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
+                  <option value="">Select year…</option>
+                  {academicYears.map((y) => (
+                    <option key={y.id} value={y.id}>{y.name}</option>
                   ))}
                 </select>
+              </FormField>
+
+              <FormField
+                label="ID / Extrait number"
+                name="id_number"
+                error={errors.id_number}
+                className="col-span-2"
+              >
+                <input className={inputClass} placeholder="Optional" {...register("id_number")} />
               </FormField>
             </div>
           </div>
 
-          <div className="flex shrink-0 justify-end gap-3 border-t border-border px-6 py-4">
-            <Button type="button" variant="outline" disabled={busy} onClick={handleClose}>
+          {/* Footer */}
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={busy}
+              className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+            >
               Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+            >
               {busy ? "Saving…" : "Enrol student"}
-            </Button>
+            </button>
           </div>
         </form>
       </div>

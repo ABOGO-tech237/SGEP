@@ -1,0 +1,379 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+\geometry{margin=2.5cm}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    pdftitle={SGEP --- Guide testeur API},
+}
+
+\title{SGEP --- Guide du testeur API\\
+\large Parcours d'exploration Swagger / OpenAPI}
+\author{Documentation SGEP}
+\date{28 juin 2026}
+
+\newcommand{\endpoint}[2]{\texttt{#1} & #2}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+%==============================================================================
+\section{Objectif}
+%==============================================================================
+
+Ce document guide une personne chargée de \textbf{tester et explorer l'API REST SGEP} via l'interface Swagger UI. Il décrit :
+\begin{itemize}[noitemsep]
+    \item comment accéder à la documentation interactive ;
+    \item le flux d'authentification ;
+    \item l'ordre recommandé pour couvrir tous les endpoints ;
+    \item les champs auto-générés vs fournis par l'utilisateur ;
+    \item les prérequis (rôles, données de test).
+\end{itemize}
+
+L'API est documentée avec \textbf{drf-spectacular} (OpenAPI~3). Les annotations source se trouvent dans \texttt{backend/core/openapi.py}.
+
+%==============================================================================
+\section{Accès à Swagger UI}
+%==============================================================================
+
+\subsection{URLs}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{URL} & \textbf{Description} \\
+\midrule
+\texttt{/api/docs/} & Interface Swagger UI (tests interactifs) \\
+\texttt{/api/redoc/} & Documentation ReDoc (lecture) \\
+\texttt{/api/schema/} & Schéma OpenAPI brut (JSON/YAML) \\
+\texttt{/api/v1/} & Préfixe de toutes les routes métier \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+En local : \texttt{http://localhost:8000/api/docs/}.\\
+En déploiement : remplacer par l'URL du backend déployé (ex.\ Render).
+
+\subsection{Générer le schéma en ligne de commande}
+
+\begin{verbatim}
+cd backend
+python manage.py spectacular --color --file schema.yml
+\end{verbatim}
+
+%==============================================================================
+\section{Authentification (première étape obligatoire)}
+%==============================================================================
+
+\subsection{Connexion}
+
+\begin{enumerate}[noitemsep]
+    \item Ouvrir le tag \textbf{Auth}.
+    \item Exécuter \texttt{POST /api/v1/auth/login/} avec :
+    \begin{verbatim}
+    {
+      "email": "admin@example.com",
+      "password": "votre_mot_de_passe"
+    }
+    \end{verbatim}
+    \item Copier \texttt{access\_token} dans la réponse.
+    \item Cliquer sur \textbf{Authorize} (cadenas) en haut de Swagger UI.
+    \item Saisir : \texttt{Bearer <access\_token>} (avec un espace après Bearer).
+\end{enumerate}
+
+\subsection{Rafraîchissement et déconnexion}
+
+\begin{itemize}[noitemsep]
+    \item \texttt{POST /api/v1/auth/refresh/} --- body \texttt{\{"refresh": "..."\}} --- renouvelle l'access token.
+    \item \texttt{POST /api/v1/auth/logout/} --- blackliste le refresh token (auth requise).
+    \item \texttt{POST /api/v1/auth/change-password/} --- ancien + nouveau mot de passe + confirmation.
+\end{itemize}
+
+\textbf{Note :} le login est limité à 5 tentatives / 10 minutes par IP.
+
+%==============================================================================
+\section{Rôles et permissions}
+%==============================================================================
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Rôle} & \textbf{Endpoints principaux} & \textbf{Remarque} \\
+\midrule
+superadmin & Core, Classes, Students, Attendance, Grades, Report Cards, Admin & Gestion scolaire complète \\
+comptable & Finance, Reports (exports) & Facturation et paiements \\
+parent (actif) & Parent Portal (notes, absences, messages…) & Compte lié à un élève \\
+parent (suspendu) & Profil, factures, date paiement prévue & Pas d'accès notes/absences \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Pour tester le portail parent, utiliser un compte parent créé à l'inscription d'un élève (champ \texttt{guardians}).
+
+%==============================================================================
+\section{Champs auto-générés vs fournis}
+%==============================================================================
+
+\subsection{Création d'un élève (\texttt{POST /api/v1/students/})}
+
+Swagger marque le \textbf{matricule} comme champ requis du schéma. Comportement réel :
+\begin{itemize}[noitemsep]
+    \item Si \texttt{matricule} est \textbf{omis ou vide}, le serveur génère un identifiant unique (format \texttt{STU-AA-XXXXXX}).
+    \item Si fourni, il doit être unique.
+\end{itemize}
+
+\textbf{Champs requis à la création :}
+\texttt{first\_name}, \texttt{last\_name}, \texttt{birth\_date}, \texttt{birth\_place}, \texttt{gender}, \texttt{class\_id}, \texttt{academic\_year\_id}.
+
+\textbf{Champs optionnels :}
+\texttt{id\_number}, \texttt{school\_id}, \texttt{is\_active}, \texttt{medical}, \texttt{guardians}.
+
+\textbf{Auto-générés côté serveur :}
+\texttt{id}, \texttt{matricule} (si absent), \texttt{created\_at}, \texttt{updated\_at}, compte parent si \texttt{guardians} fourni.
+
+\subsection{Factures}
+
+\begin{itemize}[noitemsep]
+    \item À l'\textbf{inscription} (\texttt{POST .../enroll/}) : seule la facture \texttt{INSC} est créée automatiquement.
+    \item Les tranches \texttt{TR1}, \texttt{TR2}, \texttt{TR3} sont générées plus tard par le comptable via \texttt{POST /api/v1/finance/invoices/generate/}.
+\end{itemize}
+
+\subsection{Exports asynchrones}
+
+Les endpoints d'export (élèves, absences, notes, finance) retournent \texttt{202} avec un \texttt{job\_id}. Suivre ensuite :
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET /api/v1/reports/\{job\_id\}/status/}
+    \item \texttt{GET /api/v1/reports/\{job\_id\}/download/} lorsque \texttt{status = completed}
+\end{enumerate}
+
+%==============================================================================
+\section{Parcours de test recommandé}
+%==============================================================================
+
+Suivre cet ordre pour respecter les dépendances métier SGEP.
+
+\subsection{Phase 0 --- Authentification}
+\begin{enumerate}[noitemsep]
+    \item \texttt{POST /api/v1/auth/login/}
+    \item \texttt{GET /api/v1/admin/dashboard/} (vérifier accès superadmin)
+\end{enumerate}
+
+\subsection{Phase 1 --- Paramétrage (Core)}
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET/POST /api/v1/schools/}
+    \item \texttt{GET/PATCH /api/v1/schools/\{id\}/}
+    \item \texttt{GET/POST /api/v1/academic-years/} --- activer l'année (\texttt{is\_active: true}) pour ouvrir les inscriptions
+    \item \texttt{GET/PATCH /api/v1/academic-years/\{id\}/}
+\end{enumerate}
+
+\subsection{Phase 2 --- Structure pédagogique (Classes)}
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET/POST /api/v1/classes/}
+    \item \texttt{GET/PATCH /api/v1/classes/\{id\}/}
+    \item \texttt{GET/POST /api/v1/subjects/}
+    \item \texttt{GET/PATCH /api/v1/subjects/\{id\}/}
+\end{enumerate}
+
+\subsection{Phase 3 --- Élèves (Students)}
+\begin{enumerate}[noitemsep]
+    \item \texttt{POST /api/v1/students/} --- créer avec tuteurs (\texttt{guardians})
+    \item \texttt{GET /api/v1/students/} --- pagination : \texttt{items}, \texttt{total}, \texttt{page}, \texttt{page\_size}
+    \item \texttt{GET /api/v1/students/\{id\}/}
+    \item \texttt{PATCH /api/v1/students/\{id\}/}
+    \item \texttt{GET /api/v1/students/\{id\}/history/}
+    \item \texttt{POST /api/v1/students/\{id\}/enroll/} --- inscription + facture INSC
+    \item \texttt{POST /api/v1/students/\{id\}/promote/}
+    \item \texttt{GET /api/v1/students/export/pdf/} puis suivi job
+    \item \texttt{GET /api/v1/students/export/excel/} puis suivi job
+    \item \texttt{DELETE /api/v1/students/\{id\}/} --- soft delete
+\end{enumerate}
+
+\subsection{Phase 4 --- Présences (Attendance)}
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET/POST /api/v1/attendance/}
+    \item \texttt{PUT /api/v1/attendance/\{id\}/}
+    \item \texttt{POST /api/v1/attendance/\{id\}/justify/}
+    \item \texttt{GET /api/v1/attendance/stats/} --- \texttt{class\_id}, \texttt{date\_from}, \texttt{date\_to} requis
+    \item \texttt{GET /api/v1/attendance/export/}
+\end{enumerate}
+
+\subsection{Phase 5 --- Notes et bulletins (Grades / Report Cards)}
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET/POST /api/v1/grades/}
+    \item \texttt{PUT /api/v1/grades/\{id\}/}
+    \item \texttt{POST /api/v1/grades/bulk/}
+    \item \texttt{GET /api/v1/grades/export/results/}
+    \item \texttt{POST /api/v1/report-cards/generate/}
+    \item \texttt{GET /api/v1/report-cards/\{job\_id\}/status/} --- \texttt{pk} = ID du job, pas du bulletin
+    \item \texttt{GET /api/v1/report-cards/\{id\}/download/}
+    \item \texttt{POST /api/v1/report-cards/\{id\}/publish/}
+\end{enumerate}
+
+\subsection{Phase 6 --- Finance (Comptable)}
+Se connecter avec un compte \textbf{comptable} ou superadmin.
+
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET /api/v1/finance/dashboard/}
+    \item \texttt{GET /api/v1/finance/invoices/}
+    \item \texttt{POST /api/v1/finance/invoices/generate/} --- tranches TR1/TR2/TR3
+    \item \texttt{GET /api/v1/finance/overdue/}
+    \item \texttt{POST /api/v1/finance/payments/}
+    \item \texttt{GET /api/v1/finance/payments/\{id\}/receipt/}
+    \item \texttt{GET /api/v1/finance/export/excel/}
+\end{enumerate}
+
+\subsection{Phase 7 --- Portail parent}
+Se connecter avec le compte parent.
+
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET /api/v1/parent/me/}
+    \item \texttt{GET /api/v1/parent/me/student/}
+    \item \texttt{GET /api/v1/parent/me/grades/?period\_id=...}
+    \item \texttt{GET /api/v1/parent/me/attendance/}
+    \item \texttt{GET /api/v1/parent/me/report-cards/}
+    \item \texttt{GET /api/v1/parent/me/report-cards/\{id\}/download/}
+    \item \texttt{GET /api/v1/parent/me/invoices/}
+    \item \texttt{PATCH /api/v1/parent/me/invoices/\{id\}/planned-payment-date/}
+    \item \texttt{GET /api/v1/parent/me/invoices/\{payment\_id\}/receipt/} --- \texttt{pk} = ID paiement
+    \item \texttt{GET/POST /api/v1/parent/me/messages/}
+\end{enumerate}
+
+\subsection{Phase 8 --- Jobs d'export (Reports)}
+\begin{enumerate}[noitemsep]
+    \item \texttt{GET /api/v1/reports/\{job\_id\}/status/}
+    \item \texttt{GET /api/v1/reports/\{job\_id\}/download/}
+\end{enumerate}
+
+%==============================================================================
+\section{Inventaire complet des endpoints}
+%==============================================================================
+
+\begin{longtable}{@{}p{6.8cm}p{1.2cm}p{6.5cm}@{}}
+\toprule
+\textbf{Chemin} & \textbf{Méthodes} & \textbf{Tag Swagger} \\
+\midrule
+\endhead
+\endpoint{/api/v1/auth/login/}{POST} & Auth \\
+\endpoint{/api/v1/auth/refresh/}{POST} & Auth \\
+\endpoint{/api/v1/auth/logout/}{POST} & Auth \\
+\endpoint{/api/v1/auth/change-password/}{POST} & Auth \\
+\endpoint{/api/v1/admin/dashboard/}{GET} & Admin \\
+\endpoint{/api/v1/schools/}{GET, POST} & Core \\
+\endpoint{/api/v1/schools/\{id\}/}{GET, PATCH} & Core \\
+\endpoint{/api/v1/academic-years/}{GET, POST} & Core \\
+\endpoint{/api/v1/academic-years/\{id\}/}{GET, PATCH} & Core \\
+\endpoint{/api/v1/classes/}{GET, POST} & Classes \\
+\endpoint{/api/v1/classes/\{id\}/}{GET, PATCH} & Classes \\
+\endpoint{/api/v1/subjects/}{GET, POST} & Classes \\
+\endpoint{/api/v1/subjects/\{id\}/}{GET, PATCH} & Classes \\
+\endpoint{/api/v1/students/}{GET, POST} & Students \\
+\endpoint{/api/v1/students/\{id\}/}{GET, PATCH, DELETE} & Students \\
+\endpoint{/api/v1/students/\{id\}/history/}{GET} & Students \\
+\endpoint{/api/v1/students/\{id\}/enroll/}{POST} & Students \\
+\endpoint{/api/v1/students/\{id\}/promote/}{POST} & Students \\
+\endpoint{/api/v1/students/export/pdf/}{GET} & Students \\
+\endpoint{/api/v1/students/export/excel/}{GET} & Students \\
+\endpoint{/api/v1/attendance/}{GET, POST} & Attendance \\
+\endpoint{/api/v1/attendance/\{id\}/}{PUT} & Attendance \\
+\endpoint{/api/v1/attendance/\{id\}/justify/}{POST} & Attendance \\
+\endpoint{/api/v1/attendance/stats/}{GET} & Attendance \\
+\endpoint{/api/v1/attendance/export/}{GET} & Attendance \\
+\endpoint{/api/v1/grades/}{GET, POST} & Grades \\
+\endpoint{/api/v1/grades/\{id\}/}{PUT} & Grades \\
+\endpoint{/api/v1/grades/bulk/}{POST} & Grades \\
+\endpoint{/api/v1/grades/export/results/}{GET} & Grades \\
+\endpoint{/api/v1/report-cards/generate/}{POST} & Report Cards \\
+\endpoint{/api/v1/report-cards/\{id\}/status/}{GET} & Report Cards \\
+\endpoint{/api/v1/report-cards/\{id\}/download/}{GET} & Report Cards \\
+\endpoint{/api/v1/report-cards/\{id\}/publish/}{POST} & Report Cards \\
+\endpoint{/api/v1/finance/invoices/}{GET} & Finance \\
+\endpoint{/api/v1/finance/invoices/generate/}{POST} & Finance \\
+\endpoint{/api/v1/finance/payments/}{POST} & Finance \\
+\endpoint{/api/v1/finance/payments/\{id\}/receipt/}{GET} & Finance \\
+\endpoint{/api/v1/finance/overdue/}{GET} & Finance \\
+\endpoint{/api/v1/finance/dashboard/}{GET} & Finance \\
+\endpoint{/api/v1/finance/export/excel/}{GET} & Finance \\
+\endpoint{/api/v1/parent/me/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/student/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/grades/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/attendance/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/report-cards/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/report-cards/\{id\}/download/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/invoices/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/invoices/\{id\}/planned-payment-date/}{PATCH} & Parent Portal \\
+\endpoint{/api/v1/parent/me/invoices/\{id\}/receipt/}{GET} & Parent Portal \\
+\endpoint{/api/v1/parent/me/messages/}{GET, POST} & Parent Portal \\
+\endpoint{/api/v1/reports/\{id\}/status/}{GET} & Reports \\
+\endpoint{/api/v1/reports/\{id\}/download/}{GET} & Reports \\
+\bottomrule
+\end{longtable}
+
+%==============================================================================
+\section{Format des erreurs}
+%==============================================================================
+
+Les erreurs DRF sont encapsulées par le gestionnaire custom :
+\begin{verbatim}
+{
+  "success": false,
+  "error": {
+    "message": "Description lisible",
+    "details": { ... }
+  }
+}
+\end{verbatim}
+
+Codes courants : \texttt{400} validation, \texttt{401} non authentifié, \texttt{403} rôle insuffisant, \texttt{404} ressource absente, \texttt{409} conflit (ex.\ matricule dupliqué).
+
+%==============================================================================
+\section{Prérequis de test}
+%==============================================================================
+
+\begin{itemize}[noitemsep]
+    \item Backend Django démarré avec variables d'environnement Appwrite configurées.
+    \item Au moins un utilisateur \textbf{superadmin} et un \textbf{comptable} en base Appwrite.
+    \item Clé \texttt{MEDICAL\_ENCRYPTION\_KEY} pour déchiffrer les données médicales côté admin.
+    \item Redis + Celery pour les exports et bulletins asynchrones.
+    \item Année scolaire active avant inscription d'élèves.
+\end{itemize}
+
+%==============================================================================
+\section{Checklist de couverture}
+%==============================================================================
+
+Cocher chaque tag Swagger une fois tous ses endpoints testés :
+
+\begin{itemize}[noitemsep]
+    \item[$\square$] Auth (4 endpoints)
+    \item[$\square$] Admin (1)
+    \item[$\square$] Core (4 ressources)
+    \item[$\square$] Classes (4 ressources)
+    \item[$\square$] Students (8 chemins)
+    \item[$\square$] Attendance (5 chemins)
+    \item[$\square$] Grades (4 chemins)
+    \item[$\square$] Report Cards (4 chemins)
+    \item[$\square$] Finance (7 chemins)
+    \item[$\square$] Parent Portal (10 chemins)
+    \item[$\square$] Reports (2 chemins)
+\end{itemize}
+
+\textbf{Total : 52 opérations HTTP} documentées sur \textbf{46 chemins} sous \texttt{/api/v1/}.
+
+\end{document}
