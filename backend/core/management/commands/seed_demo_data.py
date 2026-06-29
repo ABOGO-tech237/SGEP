@@ -32,27 +32,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.core.management.base import BaseCommand
 
-from core.appwrite_utils import documents_of, to_dict
-
-
-def _install_get_body_shim() -> None:
-    """Stop the appwrite SDK from sending a body on GET requests."""
-    from appwrite.client import Client
-
-    if getattr(Client, "_sgep_get_body_shim", False):
-        return
-
-    _original_call = Client.call
-
-    def _patched_call(self, method, path="", headers=None, params=None, response_type="json"):
-        if str(method).lower() == "get":
-            headers = dict(headers or {})
-            # Empty content-type makes the SDK skip json.dumps -> no request body.
-            headers["content-type"] = ""
-        return _original_call(self, method, path, headers, params, response_type)
-
-    Client.call = _patched_call
-    Client._sgep_get_body_shim = True
+from core.appwrite_utils import documents_of, install_appwrite_get_body_shim, to_dict
 
 
 def _now() -> str:
@@ -158,7 +138,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        _install_get_body_shim()
+        install_appwrite_get_body_shim()
         self.db_id = settings.APPWRITE_DB_ID
         self.counts: dict[str, int] = {}
         self.failures: dict[str, int] = {}

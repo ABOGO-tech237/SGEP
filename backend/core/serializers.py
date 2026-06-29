@@ -13,6 +13,16 @@ class SchoolSerializer(serializers.Serializer):
 	is_active = serializers.BooleanField(default=True)
 
 
+class LevelSerializer(serializers.Serializer):
+	id = serializers.CharField(read_only=True)
+	code = serializers.CharField()
+	name = serializers.CharField()
+	cycle = serializers.CharField(required=False, allow_blank=True, default="")
+	age = serializers.IntegerField(required=False, allow_null=True)
+	language = serializers.CharField(required=False, allow_blank=True, default="")
+	is_active = serializers.BooleanField(default=True)
+
+
 class AcademicYearSerializer(serializers.Serializer):
 	id = serializers.CharField(read_only=True)
 	name = serializers.CharField()

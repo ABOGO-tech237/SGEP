@@ -111,3 +111,28 @@ class AcademicYearRepository:
 			return _normalize(docs[0]) if docs else None
 		except AppwriteException:
 			raise
+
+
+class LevelRepository:
+	COLLECTION_ID = "levels"
+
+	@staticmethod
+	def list() -> list[dict]:
+		try:
+			response = databases.list_documents(
+				DB_ID,
+				LevelRepository.COLLECTION_ID,
+				[Query.order_asc("code")],
+			)
+			return [_normalize(doc) for doc in documents_of(response)]
+		except AppwriteException:
+			raise
+
+	@staticmethod
+	def get(level_id: str) -> dict | None:
+		try:
+			return _normalize(databases.get_document(DB_ID, LevelRepository.COLLECTION_ID, level_id))
+		except AppwriteException as exc:
+			if getattr(exc, "code", None) == 404:
+				return None
+			raise

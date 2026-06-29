@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,8 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FormField } from "@/components/ui/FormField";
-import type { AcademicYearRecord } from "@/lib/types/core";
+import { buildNameLookup, lookupName } from "@/lib/lookups";
+import type { AcademicYearRecord, LevelRecord } from "@/lib/types/core";
 import {
   ClassCreateSchema,
   SubjectCreateSchema,
@@ -38,20 +39,11 @@ async function fetchAcademicYears(): Promise<AcademicYearRecord[]> {
   return (await response.json()) as AcademicYearRecord[];
 }
 
-const classColumns: ColumnDef<ClassRecord>[] = [
-  { accessorKey: "name", header: "Name" },
-  { accessorKey: "level_id", header: "Level" },
-  { accessorKey: "academic_year_id", header: "Academic year" },
-  { accessorKey: "teacher_id", header: "Teacher ID", cell: ({ getValue }) => (getValue() as string) || "—" },
-  { accessorKey: "capacity", header: "Capacity", cell: ({ getValue }) => String(getValue() ?? "—") },
-];
-
-const subjectColumns: ColumnDef<SubjectRecord>[] = [
-  { accessorKey: "name", header: "Name" },
-  { accessorKey: "code", header: "Code" },
-  { accessorKey: "coefficient", header: "Coefficient" },
-  { accessorKey: "class_id", header: "Class", cell: ({ getValue }) => (getValue() as string) || "—" },
-];
+async function fetchLevels(): Promise<LevelRecord[]> {
+  const response = await fetch("/api/admin/levels");
+  if (!response.ok) throw new Error("Unable to load levels.");
+  return (await response.json()) as LevelRecord[];
+}
 
 export default function ClassesPage() {
   const queryClient = useQueryClient();
@@ -63,6 +55,69 @@ export default function ClassesPage() {
     queryKey: ["admin", "academic-years"],
     queryFn: fetchAcademicYears,
   });
+  const levelsQuery = useQuery({
+    queryKey: ["admin", "levels"],
+    queryFn: fetchLevels,
+  });
+
+  const levelNames = useMemo(
+    () => buildNameLookup(levelsQuery.data ?? []),
+    [levelsQuery.data],
+  );
+  const yearNames = useMemo(
+    () => buildNameLookup(yearsQuery.data ?? []),
+    [yearsQuery.data],
+  );
+  const classNames = useMemo(
+    () => buildNameLookup(classesQuery.data ?? []),
+    [classesQuery.data],
+  );
+
+  const classColumns = useMemo<ColumnDef<ClassRecord>[]>(
+    () => [
+      { accessorKey: "name", header: "Name" },
+      {
+        id: "level",
+        header: "Level",
+        accessorFn: (row) => lookupName(levelNames, row.level_id, row.level_id),
+        cell: ({ row }) => lookupName(levelNames, row.original.level_id, row.original.level_id),
+      },
+      {
+        id: "academic_year",
+        header: "Academic year",
+        accessorFn: (row) =>
+          lookupName(yearNames, row.academic_year_id, row.academic_year_id),
+        cell: ({ row }) =>
+          lookupName(yearNames, row.original.academic_year_id, row.original.academic_year_id),
+      },
+      {
+        accessorKey: "teacher_id",
+        header: "Teacher ID",
+        cell: ({ getValue }) => (getValue() as string) || "—",
+      },
+      {
+        accessorKey: "capacity",
+        header: "Capacity",
+        cell: ({ getValue }) => String(getValue() ?? "—"),
+      },
+    ],
+    [levelNames, yearNames],
+  );
+
+  const subjectColumns = useMemo<ColumnDef<SubjectRecord>[]>(
+    () => [
+      { accessorKey: "name", header: "Name" },
+      { accessorKey: "code", header: "Code" },
+      { accessorKey: "coefficient", header: "Coefficient" },
+      {
+        id: "class",
+        header: "Class",
+        accessorFn: (row) => lookupName(classNames, row.class_id, row.class_id ?? "—"),
+        cell: ({ row }) => lookupName(classNames, row.original.class_id, row.original.class_id ?? "—"),
+      },
+    ],
+    [classNames],
+  );
 
   const classForm = useForm<ClassCreateValues>({
     resolver: zodResolver(ClassCreateSchema),
@@ -144,8 +199,15 @@ export default function ClassesPage() {
             <FormField label="Name" name="name" error={classForm.formState.errors.name} required>
               <input className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...classForm.register("name")} />
             </FormField>
-            <FormField label="Level ID" name="level_id" error={classForm.formState.errors.level_id} required>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...classForm.register("level_id")} />
+            <FormField label="Level" name="level_id" error={classForm.formState.errors.level_id} required>
+              <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...classForm.register("level_id")}>
+                <option value="">Select level</option>
+                {(levelsQuery.data ?? []).map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {level.name}
+                  </option>
+                ))}
+              </select>
             </FormField>
             <FormField label="Academic year" name="academic_year_id" error={classForm.formState.errors.academic_year_id} required>
               <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...classForm.register("academic_year_id")}>
@@ -196,8 +258,15 @@ export default function ClassesPage() {
                 {...subjectForm.register("coefficient", { valueAsNumber: true })}
               />
             </FormField>
-            <FormField label="Class ID" name="class_id" error={subjectForm.formState.errors.class_id}>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...subjectForm.register("class_id")} />
+            <FormField label="Class" name="class_id" error={subjectForm.formState.errors.class_id}>
+              <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...subjectForm.register("class_id")}>
+                <option value="">No class</option>
+                {(classesQuery.data ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </FormField>
             <Button type="submit" disabled={createSubject.isPending} className="w-full">
               {createSubject.isPending ? "Creating…" : "Create subject"}
