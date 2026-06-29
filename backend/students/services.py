@@ -85,6 +85,15 @@ class StudentService:
         return student
 
     @staticmethod
+    def _generate_matricule() -> str:
+        year = datetime.now(timezone.utc).year
+        for _ in range(20):
+            candidate = f"SGEP-{year}-{secrets.randbelow(10000):04d}"
+            if not StudentRepository.find_by_matricule(candidate):
+                return candidate
+        raise ConflictError("Impossible de generer un matricule unique.")
+
+    @staticmethod
     def create(validated_data: dict, user_id: str = "system", ip_address: str = "") -> dict:
         payload = dict(validated_data)
         guardians = payload.pop("guardians", [])
@@ -95,14 +104,12 @@ class StudentService:
             if payload.get(optional_field) is None:
                 payload.pop(optional_field, None)
 
-        # Auto-generate matricule when not provided
-        if not payload.get("matricule"):
-            year = datetime.now(timezone.utc).strftime("%y")
-            payload["matricule"] = f"STU-{year}-{StudentService.generate_temp_code(6).upper()}"
-
-        existing = StudentRepository.find_by_matricule(payload["matricule"])
-        if existing:
+        matricule = (payload.get("matricule") or "").strip()
+        if not matricule:
+            matricule = StudentService._generate_matricule()
+        elif StudentRepository.find_by_matricule(matricule):
             raise ConflictError("Le matricule existe deja.")
+        payload["matricule"] = matricule
 
         payload["medical"] = StudentService._serialize_medical(medical)
         payload["history"] = StudentService._append_history(

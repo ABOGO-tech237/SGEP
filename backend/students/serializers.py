@@ -79,7 +79,7 @@ class StudentListSerializer(serializers.Serializer):
 class StudentCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(max_length=100)
-    matricule = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    matricule = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
     birth_date = serializers.CharField()
     birth_place = serializers.CharField(max_length=100)
     gender = serializers.CharField(max_length=10)
@@ -92,6 +92,8 @@ class StudentCreateSerializer(serializers.Serializer):
     guardians = serializers.ListField(child=serializers.DictField(), required=False)
 
     def validate_matricule(self, value: str) -> str:
+        if not (value or "").strip():
+            return ""
         student_id = self.context.get("student_id")
         existing = StudentRepository.find_by_matricule(value)
         if existing and existing.get("id") != student_id:

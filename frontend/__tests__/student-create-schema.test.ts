@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { StudentCreateSchema } from "@/lib/types/students";
+import { CreateStudentSchema } from "@/lib/types/students";
 
-describe("StudentCreateSchema", () => {
+describe("CreateStudentSchema", () => {
   const validPayload = {
     first_name: "Awa",
     last_name: "Nana",
@@ -14,17 +14,17 @@ describe("StudentCreateSchema", () => {
   };
 
   it("accepts payload without matricule", () => {
-    const result = StudentCreateSchema.safeParse(validPayload);
+    const result = CreateStudentSchema.safeParse(validPayload);
     expect(result.success).toBe(true);
   });
 
   it("accepts an optional user-provided matricule", () => {
-    const result = StudentCreateSchema.safeParse({ ...validPayload, matricule: "2026-001" });
+    const result = CreateStudentSchema.safeParse({ ...validPayload, matricule: "2026-001" });
     expect(result.success).toBe(true);
   });
 
   it("accepts empty matricule", () => {
-    const result = StudentCreateSchema.safeParse({ ...validPayload, matricule: "" });
+    const result = CreateStudentSchema.safeParse({ ...validPayload, matricule: "" });
     expect(result.success).toBe(true);
   });
 });
